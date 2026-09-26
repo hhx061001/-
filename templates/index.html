@@ -1,0 +1,2103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>个人账单分析工具</title>
+  <style>
+    :root {
+      --bg: #f9fafb;
+      --panel: #ffffff;
+      --text: #0f1115;
+      --muted: #61666b;
+      --line: rgba(0, 0, 0, 0.10);
+      --brand: #3964fe;
+      --brand-hover: #5686fe;
+      --brand-soft: #edf3fe;
+      --orange: #f97316;
+      --danger: #dc2626;
+      --green: #059669;
+      --amber: #d97706;
+      --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 14px rgba(0,0,0,.04);
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      min-height: 100vh;
+    }
+    button, select, input[type=text] {
+      font: inherit;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: #fff;
+      color: var(--text);
+      transition: border-color .15s, background .15s, box-shadow .15s, transform .05s;
+    }
+    button { cursor: pointer; }
+    button:hover { transform: translateY(-1px); }
+    button.primary {
+      background: var(--brand);
+      border-color: var(--brand);
+      color: #fff;
+      box-shadow: none;
+    }
+    button.primary:hover { background: var(--brand-hover); box-shadow: none; }
+    button.danger { background: #fff; border-color: #fecaca; color: var(--danger); }
+    button.small { padding: 4px 9px; font-size: 12px; }
+    button.link { border: 0; background: none; color: var(--brand); padding: 2px 6px; }
+    .app-shell { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 220px;
+      background: #f9fafb;
+      border-right: 1px solid rgba(0, 0, 0, 0.08);
+      color: #0f1115;
+      position: fixed;
+      inset: 0 auto 0 0;
+      display: flex;
+      flex-direction: column;
+      padding: 16px 12px;
+      z-index: 30;
+      -webkit-app-region: drag;
+    }
+    .sidebar button, .sidebar input, .sidebar select, .sidebar summary {
+      -webkit-app-region: no-drag;
+    }
+    .sidebar,
+    .sidebar button,
+    .sidebar summary,
+    .sidebar .brand,
+    .sidebar .side-foot {
+      font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+    }
+    .sidebar-collapsed {
+      width: 0;
+      min-width: 0;
+      padding: 0;
+      border-right: 0;
+      overflow: hidden;
+    }
+    .sidebar-collapsed ~ .content {
+      margin-left: 0;
+    }
+    .sidebar .brand {
+      color: #0f1115;
+      font-weight: 700;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 10px 22px;
+    }
+    .sidebar .brand-mark {
+      width: 30px; height: 30px; border-radius: 9px;
+      background: #3964fe;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 15px; font-weight: 800;
+    }
+    .sidebar nav { display: flex; flex-direction: column; gap: 4px; }
+    .sidebar nav button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 10px 12px;
+      background: transparent;
+      border: 0;
+      color: #0f1115;
+      border-radius: 8px;
+      text-align: left;
+      font-size: 14px;
+      font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+    }
+    .sidebar nav button svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .sidebar nav button:hover { background: #f1f3f5; color: #0f1115; transform: none; }
+    .sidebar nav button.active {
+      background: var(--brand-soft);
+      color: var(--brand);
+      box-shadow: none;
+    }
+    .sidebar-sub summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 9px 12px;
+      color: #0f1115;
+      font-size: 13px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+    }
+    .sidebar-sub summary svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .sidebar-sub summary:hover { background: #f1f3f5; }
+    .sidebar-sub[open] summary { color: #0f1115; }
+    .sidebar-sub button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      padding: 7px 12px 7px 24px;
+      color: #0f1115;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+    }
+    .sidebar-sub button:hover { background: #f1f3f5; color: #0f1115; transform: none; }
+    .sidebar .side-foot { margin-top: auto; font-size: 12px; color: #a1a1aa; padding: 12px; line-height: 1.6; }
+    .content { margin-left: 220px; flex: 1; padding: 28px 32px 64px; min-width: 0; }
+    .page { display: none; }
+    .page.active { display: block; animation: page-in .18s ease-out; }
+    @keyframes page-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
+    h1 { font-size: 22px; margin: 0 0 12px; letter-spacing: -.01em; }
+    h2 { font-size: 17px; margin: 0 0 12px; }
+    h3 { font-size: 15px; margin: 18px 0 8px; }
+    .muted { color: var(--muted); }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .gap { gap: 12px; }
+    .dropzone {
+      border: 2px dashed #c4b5fd;
+      border-radius: 14px;
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--muted);
+      background: #f8fafc;
+      cursor: pointer;
+      transition: .18s;
+    }
+    .dropzone:hover { border-color: #93c5fd; background: #f8fafc; }
+    .dropzone.drag { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+    .dropzone input { display: none; }
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      padding: 2px 9px;
+      border-radius: 20px;
+      background: var(--brand-soft);
+      color: #1d4ed8;
+      margin-right: 5px;
+      white-space: nowrap;
+    }
+    .badge.green { background: #ecfdf5; color: #065f46; }
+    .badge.red { background: #fef2f2; color: #991b1b; }
+    .badge.amber { background: #fffbeb; color: #92400e; }
+    .badge.gray { background: #f3f4f6; color: #4b5563; }
+    .table-wrap { overflow: auto; max-height: 68vh; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 11px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: #ffffff;
+      box-shadow: inset 0 -1px 0 var(--line);
+    }
+    .header-hidden thead { display: none; }
+    th { background: #ffffff; color: #475569; font-weight: 600; white-space: nowrap; }
+    th[data-col="description"], td[data-col="description"] {
+      max-width: 240px;
+      white-space: normal;
+      word-break: normal;
+      overflow-wrap: break-word;
+    }
+    tbody tr { transition: background .12s; }
+    tbody tr:hover td { background: #f8fafc; }
+    .mono { font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace; font-size: 12px; }
+    .nowrap { white-space: nowrap; }
+    .amount { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .amount.expense { color: #dc2626; }
+    .amount.income { color: #059669; }
+    .amount.neutral { color: #64748b; }
+      .big-number {
+        font-size: 44px;
+        font-weight: 700;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-variant-numeric: tabular-nums;
+        color: #0f1115;
+      letter-spacing: -1.4px;
+      margin: 10px 0;
+    }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 17px;
+      box-shadow: var(--shadow);
+    }
+    .stat .label { color: var(--muted); font-size: 13px; }
+    .stat .value { font-size: 23px; font-weight: 700; margin-top: 5px; }
+    .stat .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .cat-row { display: flex; align-items: center; gap: 12px; margin: 9px 0; padding: 5px 4px; border-radius: 8px; transition: background .12s; }
+    .cat-row:hover { background: #f8fafc; }
+    .cat-name { width: 62px; flex-shrink: 0; font-weight: 600; }
+    .bar-track { flex: 1; height: 22px; background: #eef1f6; border-radius: 6px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 6px; min-width: 2px; }
+    .cat-amt { width: 170px; text-align: right; font-size: 13px; }
+    .candidate {
+      border: 1px solid #fde68a;
+      background: #fffbeb;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 12px;
+    }
+    .queue-list { display: flex; flex-direction: column; gap: 10px; }
+    .queue-item {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 12px;
+      padding: 0;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(15,23,42,.03);
+    }
+    .queue-item[open] { box-shadow: var(--shadow); }
+    .queue-item summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 15px;
+      font-size: 14px;
+    }
+    .queue-item summary::-webkit-details-marker { display: none; }
+    .queue-item summary:hover { background: #f8fafc; }
+    .queue-item .q-type { flex-shrink: 0; }
+    .queue-item .q-amount { font-weight: 800; min-width: 90px; }
+    .queue-item .q-main { flex: 1; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .queue-item .q-body { padding: 0 15px 15px; border-top: 1px solid var(--line); }
+    .queue-item .q-body .tx-card { margin-top: 12px; }
+    .done-list .queue-item { opacity: .62; }
+    .two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .batch-row {
+      display: grid;
+      grid-template-columns: minmax(180px, 0.85fr) minmax(0, 1.15fr);
+      gap: 12px;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .batch-info { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .batch-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px; }
+    .tx-card { border: 1px solid var(--line); border-radius: 11px; padding: 13px; background: #fff; }
+    .tx-card strong { font-size: 14px; }
+    .small { font-size: 12px; color: var(--muted); }
+    .warnings {
+      max-height: 160px;
+      overflow: auto;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      padding: 11px;
+      margin-top: 10px;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+    .hidden { display: none; }
+      .flash {
+      position: fixed;
+      right: 22px;
+      top: 22px;
+        background: #0f1115;
+      color: #fff;
+      padding: 10px 15px;
+      border-radius: 10px;
+      z-index: 70;
+      box-shadow: 0 10px 30px rgba(0,0,0,.18);
+    }
+    .flash.error { background: #991b1b; }
+    .window-controls {
+      position: fixed;
+      top: 12px;
+      right: 16px;
+      z-index: 100;
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      padding: 4px;
+      background: rgba(255,255,255,.72);
+      border: 1px solid rgba(228,228,231,.85);
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(15,23,42,.08);
+      backdrop-filter: blur(10px);
+      -webkit-app-region: no-drag;
+      display: none;
+    }
+    .drag-region {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 36px;
+      z-index: 90;
+      -webkit-app-region: drag;
+      cursor: grab;
+      display: none;
+    }
+    .window-controls button {
+      width: 30px;
+      height: 30px;
+      border: 0;
+      background: transparent;
+      border-radius: 10px;
+      color: #52525b;
+      font-size: 15px;
+      line-height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: background .15s, color .15s, transform .05s;
+    }
+    .window-controls button:hover { background: #f4f4f5; transform: none; }
+    .window-controls #btn-close-window:hover { background: #ef4444; color: #fff; }
+    .selection-bar {
+      position: fixed;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      background: #ffffff;
+      color: #18181b;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 65;
+      box-shadow: 0 12px 32px rgba(0,0,0,.12);
+      white-space: nowrap;
+      font-size: 13px;
+    }
+    .selection-bar.hidden { display: none; }
+    .selection-bar .selection-info { font-size: 13px; color: var(--muted); }
+    .selection-bar button { background: #f4f4f5; border-color: #e4e4e7; color: #18181b; padding: 5px 10px; font-size: 12px; }
+    .selection-bar button:hover { background: #e4e4e7; transform: none; }
+    .selection-bar button.danger { background: #dc2626; border-color: #dc2626; color: #fff; }
+    .duplicate-row td { background: #fafaf9; color: #6b7280; }
+    .merged-chip { font-size: 12px; background: #ecfeff; color: #0e7490; border-radius: 6px; padding: 2px 7px; }
+    .empty { text-align: center; color: var(--muted); padding: 28px; }
+    .tag { display: inline-block; font-size: 12px; background: var(--brand-soft); color: #1d4ed8; border-radius: 6px; padding: 2px 7px; margin-right: 4px; }
+    .tag-del { border: 0; background: none; color: #991b1b; cursor: pointer; font-size: 12px; padding: 0 2px; }
+    .modal {
+      position: fixed; inset: 0; background: rgba(15,23,42,.36); z-index: 60;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-box {
+      background: #fff; border-radius: 12px; padding: 22px; width: 440px;
+      max-height: 84vh; overflow: auto; box-shadow: none;
+    }
+    .modal-box > .row:first-child {
+      position: sticky;
+      top: -22px;
+      background: #fff;
+      z-index: 5;
+      margin: -22px -22px 12px;
+      padding: 22px 22px 12px;
+      box-shadow: 0 1px 0 var(--line);
+    }
+    .modal-close {
+      border: 0;
+      background: #f4f4f5;
+      color: #52525b;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border-radius: 8px;
+      font-size: 18px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-close:hover { background: #e4e4e7; color: #18181b; transform: none; }
+    .modal.hidden { display: none; }
+    #confirm-modal { z-index: 120; }
+    .field-label { font-size: 13px; color: var(--muted); margin: 4px 0; }
+    .tx-detail-grid { display: grid; grid-template-columns: 86px 1fr; gap: 4px 10px; font-size: 13px; }
+    .tx-detail-grid .k { color: var(--muted); }
+    @media (max-width: 820px) {
+      .sidebar { position: static; width: 100%; flex-direction: row; align-items: center; padding: 12px; }
+      .sidebar .brand { padding: 0 12px 0 0; }
+      .sidebar nav { flex-direction: row; overflow-x: auto; }
+      .sidebar .side-foot { display: none; }
+      .content { margin-left: 0; padding: 20px 16px 48px; }
+      .two-cols { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="drag-bar" class="drag-region"></div>
+  <div id="window-controls" class="window-controls">
+    <button id="btn-minimize-window" title="最小化">—</button>
+    <button id="btn-maximize-window" title="最大化">□</button>
+    <button id="btn-close-window" title="关闭">×</button>
+  </div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">账</span>
+        <span>账单分析</span>
+      </div>
+      <nav>
+        <button data-page="pending">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+          待确认
+        </button>
+        <button data-page="detail">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
+          明细
+        </button>
+        <button data-page="summary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/></svg>
+          汇总
+        </button>
+        <details class="sidebar-sub">
+          <summary>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 19V5m0 0-4 4m4-4 4 4"/><path d="M5 21h14"/></svg>
+            独立账单
+          </summary>
+          <div id="sidebar-ledgers"></div>
+        </details>
+      </nav>
+      <div class="side-foot">数据仅存本机<br>不联网 · 不上传</div>
+    </aside>
+
+    <main class="content">
+    <section id="page-import" class="page active">
+      <div class="panel">
+        <h1>导入账单</h1>
+        <p class="muted">支持微信 CSV（UTF-8）、支付宝 CSV（GBK/GB18030）、中国银行 Excel（.xlsx/.xls）。可一次选择多个文件。数据仅保存在本地 SQLite，不会上传。</p>
+        <div class="row" style="justify-content:flex-end; margin-bottom:12px;">
+          <button class="danger" id="btn-reset-data">清空账单数据</button>
+        </div>
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" multiple accept=".csv,.xlsx,.xls">
+          <div>拖入文件到这里，或点击选择文件</div>
+          <div class="small">重复导入同一份文件时，已存在的记录会自动跳过</div>
+        </div>
+      </div>
+      <div id="import-results"></div>
+    </section>
+
+    <section id="page-pending" class="page">
+      <div class="panel">
+        <h1>待确认</h1>
+        <p class="muted">疑似重复需要人工判断；「其他」分类的商户可以按商户批量归类。</p>
+        <div class="row">
+          <button class="primary" id="btn-batch-classify">批量分类</button>
+          <button id="btn-auto-classify">自动分类</button>
+          <button id="btn-open-categories">分类管理</button>
+          <button id="btn-open-rules">商户记忆规则</button>
+        </div>
+      </div>
+      <div id="pending-content"></div>
+    </section>
+
+    <section id="page-detail" class="page">
+      <div class="panel">
+        <h1>明细</h1>
+        <div class="row gap">
+          <select id="filter-month"><option value="">全部月份</option></select>
+          <select id="filter-source">
+            <option value="">全部来源</option>
+            <option value="wx">微信</option>
+            <option value="alipay">支付宝</option>
+            <option value="boc">中国银行</option>
+            <option value="manual">手动</option>
+          </select>
+          <select id="filter-branch"><option value="生活">总账本</option></select>
+          <select id="filter-category">
+            <option value="">全部分类</option>
+            <option>吃饭</option>
+            <option>玩乐</option>
+            <option>学习</option>
+            <option>购物</option>
+            <option>其他</option>
+          </select>
+          <select id="filter-count">
+            <option value="">是否计入：全部</option>
+            <option value="1">计入支出</option>
+            <option value="0">不计入支出</option>
+          </select>
+          <input type="text" id="filter-keyword" placeholder="搜索对方/说明/备注">
+          <button class="primary" id="btn-filter">查询</button>
+          <button id="btn-reset">重置</button>
+          <button id="btn-choose-columns">选择列</button>
+          <button id="btn-manual-merge" class="danger">合并选中（2 条）</button>
+          <button id="btn-open-merges">合并对账</button>
+          <button id="btn-open-excluded">不计入账单</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="table-wrap">
+          <table id="detail-table">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="check-all"></th>
+                <th data-col="time">时间</th>
+                <th data-col="source">来源</th>
+                <th data-col="counterparty">交易对方</th>
+                <th data-col="description">说明/摘要</th>
+                <th data-col="category">分类</th>
+                <th data-col="amount">金额</th>
+                <th data-col="direction">方向</th>
+                <th data-col="count">计入</th>
+                <th data-col="payment_method">支付方式</th>
+                <th data-col="merge">合并</th>
+                <th data-col="actions">操作</th>
+              </tr>
+            </thead>
+            <tbody id="detail-body"></tbody>
+          </table>
+          <div id="detail-empty" class="empty hidden">暂无记录</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-income" class="page">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between; align-items:center;">
+          <h1 id="ledger-page-title" style="margin:0;">独立账单</h1>
+          <div class="row">
+            <button id="btn-ledger-import">导入文件</button>
+            <button id="btn-ledger-manual">手动添加</button>
+            <button id="btn-ledger-settings" class="modal-close" title="设置">⚙</button>
+          </div>
+        </div>
+        <div class="stat-grid" style="margin-top:16px;">
+          <div class="stat"><div class="label">累计收入</div><div class="value income" id="ledger-income-total">¥0.00</div></div>
+          <div class="stat"><div class="label">累计支出</div><div class="value expense" id="ledger-expense-total">¥0.00</div></div>
+          <div class="stat"><div class="label">结余</div><div class="value" id="ledger-net-total">¥0.00</div></div>
+        </div>
+      </div>
+      <div class="two-cols">
+        <div class="panel">
+          <h2>收入分类</h2>
+          <div id="ledger-income-bars"></div>
+        </div>
+        <div class="panel">
+          <h2>支出分类</h2>
+          <div id="ledger-expense-bars"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-summary" class="page">
+      <div class="panel row gap">
+        <h1 style="margin:0;">汇总</h1>
+        <select id="summary-month"></select>
+        <button class="primary" id="btn-summary-refresh">刷新</button>
+        <button id="btn-export-month" style="display:none;">导出本月 Excel</button>
+        <button id="btn-export-all" style="display:none;">导出全部 Excel</button>
+      </div>
+      <div class="panel">
+        <div class="muted">本月消费（支出 - 收入）</div>
+        <div class="big-number" id="summary-total">¥0.00</div>
+        <div class="muted" id="summary-meta"></div>
+      </div>
+      <div class="stat-grid" style="margin-bottom:18px;">
+        <div class="stat">
+          <div class="label">环比上月</div>
+          <div class="value" id="stat-prev">--</div>
+          <div class="hint" id="stat-prev-hint"></div>
+        </div>
+        <div class="stat">
+          <div class="label">对比历史月均</div>
+          <div class="value" id="stat-hist">--</div>
+          <div class="hint" id="stat-hist-hint"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>花在哪</h2>
+        <div id="category-bars"></div>
+      </div>
+    </section>
+  </main>
+  </div>
+
+  <div id="category-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">分类管理</h2>
+        <button id="btn-category-close" class="modal-close">×</button>
+      </div>
+      <p class="muted">这里添加的就是新的账单分类，会出现在明细、待确认和汇总中。删除后，该分类下的记录会自动回到“其他”。</p>
+      <div class="row" style="margin-bottom:10px;">
+        <input type="text" id="new-category-name" placeholder="输入新分类名">
+        <button class="primary" id="btn-add-category">添加分类</button>
+      </div>
+      <div id="categories-list"></div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">商户记忆规则</h2>
+        <button id="btn-rules-close" class="modal-close">×</button>
+      </div>
+      <p class="muted">手动改过分类后会记住“商户 → 分类”，重新导入时自动应用。可在这里删除规则。</p>
+      <div id="rules-list"></div>
+    </div>
+  </div>
+
+  <div id="merge-modal" class="modal hidden">
+    <div class="modal-box" style="width:680px;">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">合并对账</h2>
+        <button id="btn-merge-close" class="modal-close">×</button>
+      </div>
+      <p class="muted">每一组显示主记录和被合并记录，核对无误后可以不处理；如果合错了，点“撤销合并”。</p>
+      <div id="merge-groups-list"></div>
+    </div>
+  </div>
+
+  <div id="excluded-modal" class="modal hidden">
+    <div class="modal-box" style="width:760px;">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">不计入账单</h2>
+        <button id="btn-excluded-close" class="modal-close">×</button>
+      </div>
+      <p class="muted">这里集中存放你手动设为“不计入”的账单，不会进入消费汇总。可一键恢复计入。</p>
+      <div id="excluded-list"></div>
+    </div>
+  </div>
+
+  <div id="drill-modal" class="modal hidden">
+    <div class="modal-box" style="width:820px;">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 id="drill-title" style="margin:0;">分类明细</h2>
+        <button id="btn-drill-close" class="modal-close">×</button>
+      </div>
+      <div class="table-wrap" style="max-height:58vh; overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th><th>来源</th><th>交易对方</th><th>说明/摘要</th>
+              <th>金额</th><th>方向</th><th>分类</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="drill-body"></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:12px; justify-content:flex-end;">
+        <button class="primary" id="btn-drill-to-detail">在明细中查看</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="batch-modal" class="modal hidden">
+    <div class="modal-box" style="width:720px;">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">按商户批量分类</h2>
+        <button id="btn-batch-close" class="modal-close">×</button>
+      </div>
+      <p class="muted">同一家店只显示一行，点一个分类即可把该商户当前所有未分类记录一起归类。</p>
+      <div id="batch-list"></div>
+    </div>
+  </div>
+
+  <div id="export-modal" class="modal hidden">
+    <div class="modal-box" style="width:620px;">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">选择导出表头</h2>
+        <button id="btn-export-close" class="modal-close">×</button>
+      </div>
+      <p class="muted">勾选要导出的列，不勾选就不会出现在 Excel 里。</p>
+      <div class="row" style="margin-bottom:8px;">
+        <button class="small" id="btn-export-select-all">全选</button>
+        <button class="small" id="btn-export-select-none">全不选</button>
+      </div>
+      <div id="export-fields" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
+      <div class="row" style="margin-top:14px; justify-content:flex-end;">
+        <button class="primary" id="btn-export-confirm">开始导出</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="batch-category-modal" class="modal hidden">
+    <div class="modal-box" style="width:560px;">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">批量分类</h2>
+        <button id="btn-batch-category-close" class="modal-close">×</button>
+      </div>
+      <p class="muted">把选中的记录统一归到某个分类。</p>
+      <div class="batch-actions" id="batch-category-options"></div>
+    </div>
+  </div>
+
+  <div id="column-modal" class="modal hidden">
+    <div class="modal-box" style="width:620px;">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">选择要显示的列</h2>
+        <button id="btn-column-close" class="modal-close">×</button>
+      </div>
+      <p class="muted">勾选哪些列显示在明细表格里，和导出选择表头一样。</p>
+      <div class="row" style="margin-bottom:8px;">
+        <button class="small" id="btn-column-select-all">全选</button>
+        <button class="small" id="btn-column-select-none">全不选</button>
+      </div>
+      <div id="column-options" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
+      <div class="row" style="margin-top:14px; justify-content:flex-end;">
+        <button class="primary" id="btn-column-confirm">应用</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ledger-settings-modal" class="modal hidden">
+    <div class="modal-box" style="width:480px;">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">独立账单设置</h2>
+        <button id="btn-ledger-settings-close" class="modal-close">×</button>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <input type="text" id="new-ledger-name" placeholder="新建独立账单名称">
+        <button class="primary" id="btn-create-ledger">新建</button>
+      </div>
+      <div id="ledger-settings-current">
+        <div class="row" style="margin-bottom:10px;">
+          <input type="text" id="ledger-rename-input" placeholder="新名称">
+          <button id="btn-ledger-rename">重命名</button>
+        </div>
+        <label class="tag-option"><input type="checkbox" id="ledger-include-summary"> 纳入总汇总</label>
+        <div class="row" style="margin-top:12px;">
+          <button class="danger" id="btn-delete-current-ledger">删除当前账本</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ledger-manual-modal" class="modal hidden">
+    <div class="modal-box" style="width:560px;">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">手动添加</h2>
+        <button id="btn-ledger-manual-close" class="modal-close">×</button>
+      </div>
+      <div class="row gap" style="margin-bottom:10px;">
+        <select id="lm-direction"><option value="收入">收入</option><option value="支出">支出</option></select>
+        <select id="lm-category"></select>
+        <input type="text" id="lm-amount" placeholder="金额">
+        <input type="datetime-local" id="lm-time">
+      </div>
+      <div class="row gap" style="margin-bottom:10px;">
+        <input type="text" id="lm-counterparty" placeholder="对方/来源">
+        <input type="text" id="lm-description" placeholder="说明">
+      </div>
+      <div class="row gap" style="margin-bottom:10px;">
+        <input type="text" id="lm-payment" placeholder="支付/收款方式">
+        <input type="text" id="lm-note" placeholder="备注">
+      </div>
+      <button class="primary" id="btn-ledger-manual-save">保存</button>
+    </div>
+  </div>
+
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-box" style="width:420px;">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">确认操作</h2>
+        <button id="btn-confirm-close" class="modal-close">×</button>
+      </div>
+      <p id="confirm-message" style="margin:8px 0 18px; line-height:1.65; white-space:pre-wrap;"></p>
+      <div class="row" style="justify-content:flex-end;">
+        <button id="btn-confirm-cancel">取消</button>
+        <button class="danger" id="btn-confirm-ok">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="detail-actions" class="selection-bar hidden">
+    <div class="selection-info">已选择 <strong id="selection-count">0</strong> 条</div>
+    <div class="row">
+      <button id="btn-batch-category">批量分类</button>
+      <button class="danger" id="btn-batch-delete">批量删除</button>
+      <button id="btn-selection-clear">取消选择</button>
+    </div>
+  </div>
+
+  <div id="flash" class="flash hidden"></div>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+    const esc = (s) => String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const sourceName = { wx: "微信", alipay: "支付宝", boc: "中国银行", manual: "手动收入" };
+    const dirClass = { "支出": "expense", "收入": "income", "不计收支": "neutral" };
+    let allCategories = ["吃饭", "玩乐", "学习", "购物", "其他"];
+    const catColors = {
+      "吃饭": "#f97316", "玩乐": "#eab308", "学习": "#2563eb", "购物": "#06b6d4", "其他": "#9ca3af"
+    };
+
+    function showFlash(msg, isError = false) {
+      const el = $("#flash");
+      el.textContent = msg;
+      el.className = "flash" + (isError ? " error" : "");
+      clearTimeout(showFlash._t);
+      showFlash._t = setTimeout(() => el.classList.add("hidden"), 3000);
+    }
+
+    function askConfirm(message, options = {}) {
+      return new Promise((resolve) => {
+        const modal = $("#confirm-modal");
+        const ok = $("#btn-confirm-ok");
+        const cancel = $("#btn-confirm-cancel");
+        const close = $("#btn-confirm-close");
+        $("#confirm-message").textContent = message;
+        ok.textContent = options.confirmText || "确定";
+        ok.className = options.danger === false ? "primary" : "danger";
+        const finish = (value) => {
+          modal.classList.add("hidden");
+          ok.onclick = null;
+          cancel.onclick = null;
+          close.onclick = null;
+          modal.onclick = null;
+          resolve(value);
+        };
+        ok.onclick = () => finish(true);
+        cancel.onclick = () => finish(false);
+        close.onclick = () => finish(false);
+        modal.onclick = (event) => {
+          if (event.target === modal) finish(false);
+        };
+        modal.classList.remove("hidden");
+        cancel.focus();
+      });
+    }
+
+    async function api(path, opts = {}) {
+      const init = { method: opts.method || "GET", headers: {} };
+      if (opts.body && !(opts.body instanceof FormData)) {
+        init.headers["Content-Type"] = "application/json";
+        init.body = JSON.stringify(opts.body);
+      } else if (opts.body) {
+        init.body = opts.body;
+      }
+      const res = await fetch(path, init);
+      if (!res.ok) {
+        let msg = "请求失败";
+        try { msg = (await res.json()).error || msg; } catch (_) {}
+        throw new Error(`${path}：${msg}`);
+      }
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("application/json")) return res.json();
+      return res;
+    }
+
+    function switchPage(page) {
+      $$(".page").forEach((p) => p.classList.remove("active"));
+      $("#page-" + page).classList.add("active");
+      $$("nav button").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
+      if (page === "pending") loadPending();
+      if (page === "detail") loadDetail();
+      if (page === "summary") loadSummary();
+      if (page === "income") loadLedgers();
+    }
+    $$("nav button").forEach((b) => b.addEventListener("click", () => switchPage(b.dataset.page)));
+    document.querySelector(".sidebar").addEventListener("mousedown", (e) => {
+      if (e.target.closest("button, summary, input, select, a")) return;
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.start_drag) {
+        window.pywebview.api.start_drag();
+      }
+    });
+    document.querySelector(".drag-region").addEventListener("mousedown", () => {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.start_drag) {
+        window.pywebview.api.start_drag();
+      }
+    });
+
+    // ---------------- 导入 ----------------
+    const dropzone = $("#dropzone");
+    const fileInput = $("#fileInput");
+    dropzone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length) uploadFiles(fileInput.files);
+    });
+    ["dragenter", "dragover"].forEach((ev) => dropzone.addEventListener(ev, (e) => {
+      e.preventDefault(); dropzone.classList.add("drag");
+    }));
+    ["dragleave", "drop"].forEach((ev) => dropzone.addEventListener(ev, (e) => {
+      e.preventDefault(); dropzone.classList.remove("drag");
+    }));
+    dropzone.addEventListener("drop", (e) => {
+      if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+    });
+    $("#btn-reset-data").addEventListener("click", async () => {
+      if (!(await askConfirm("确定清空所有账单数据吗？此操作不可恢复，建议先导出 Excel 备份。"))) return;
+      try {
+        await api("/api/reset", { method: "POST" });
+        showFlash("已清空账单数据");
+        $("#import-results").innerHTML = "";
+        loadMonths();
+        loadDetail();
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    });
+
+    async function loadLedgers() {
+      try {
+        const data = await api("/api/ledgers");
+        const items = data.items || [];
+        allLedgers = items;
+        const active = items.filter((l) => !l.deleted);
+        $("#sidebar-ledgers").innerHTML = active.map((l) => `
+          <button onclick="openLedger('${esc(l.name)}')">${esc(l.name)}</button>`).join("") || '<div class="empty" style="padding:8px 12px;">暂无账本</div>';
+        const branchSelect = $("#filter-branch");
+        const currentBranch = branchSelect.value;
+        branchSelect.innerHTML = ['<option value="生活">总账本</option>']
+          .concat(active.map((l) => `<option value="${esc(l.name)}">${esc(l.name)}</option>`))
+          .join("");
+        branchSelect.value = currentBranch;
+        if (currentLedger) loadLedgerStats();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function loadLedgerStats() {
+      if (!currentLedger) return;
+      $("#ledger-page-title").textContent = currentLedger;
+      try {
+        const q = new URLSearchParams({ branch: currentLedger });
+        const data = await api("/api/transactions?" + q.toString());
+        const items = (data.items || []).filter((t) => !t.is_duplicate);
+        let income = 0, expense = 0;
+        const incomeMap = {}, expenseMap = {};
+        for (const t of items) {
+          const key = t.category || "其他";
+          if (t.direction === "收入") {
+            income += Number(t.amount || 0);
+            incomeMap[key] = (incomeMap[key] || 0) + Number(t.amount || 0);
+          } else if (t.direction === "支出") {
+            expense += Number(t.amount || 0);
+            expenseMap[key] = (expenseMap[key] || 0) + Number(t.amount || 0);
+          }
+        }
+        $("#ledger-income-total").textContent = "¥" + income.toFixed(2);
+        $("#ledger-expense-total").textContent = "¥" + expense.toFixed(2);
+        $("#ledger-net-total").textContent = "¥" + (income - expense).toFixed(2);
+        renderLedgerBars("#ledger-income-bars", incomeMap, income, "收入");
+        renderLedgerBars("#ledger-expense-bars", expenseMap, expense, "支出");
+      } catch (err) { showFlash(err.message, true); }
+    }
+    function renderLedgerBars(selector, map, total, direction) {
+      const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+      $(selector).innerHTML = entries.map(([cat, amt]) => {
+        const pct = total ? Math.max(0, Math.min(100, amt / total * 100)) : 0;
+        return `<div class="cat-row" data-cat="${esc(cat)}" data-dir="${direction}" onclick="openLedgerDrill(this.dataset.cat, this.dataset.dir)" style="cursor:pointer;">
+          <div class="cat-name">${esc(cat)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${catColors[cat] || "#94a3b8"}"></div></div>
+          <div class="cat-amt">¥${Number(amt).toFixed(2)} · ${total ? (amt / total * 100).toFixed(1) : 0}%</div>
+        </div>`;
+      }).join("") || '<div class="empty">暂无记录</div>';
+    }
+    async function openLedgerDrill(category, direction) {
+      if (!currentLedger) return;
+      drillCategory = category;
+      drillMonth = currentLedger;
+      drillDirection = direction;
+      $("#drill-title").textContent = `${currentLedger} · ${category} · ${direction}`;
+      try {
+        const q = new URLSearchParams({ branch: currentLedger, category });
+        const data = await api("/api/transactions?" + q.toString());
+        const items = (data.items || []).filter((t) => t.direction === direction && !t.is_duplicate);
+        $("#drill-body").innerHTML = items.map((t) => `
+          <tr>
+            <td class="mono">${esc(t.transaction_time || "")}</td>
+            <td>${esc(sourceName[t.source] || t.source)}</td>
+            <td>${esc(t.counterparty || "—")}</td>
+            <td>${esc(t.description || "—")}</td>
+            <td class="amount ${dirClass[t.direction] || "neutral"}">¥${Number(t.amount || 0).toFixed(2)}</td>
+            <td>${esc(t.direction)}</td>
+            <td><select onchange="setLedgerDrillCategory(${t.id}, this.value)">
+              ${allCategories.map((c) => `<option value="${c}" ${t.category === c ? "selected" : ""}>${c}</option>`).join("")}
+            </select></td>
+            <td class="nowrap">
+              <select class="small" onchange="setBranch(${t.id}, this.value)">
+                <option value="生活" ${t.branch === "生活" ? "selected" : ""}>总账本</option>
+                ${ledgerOptions(t.branch)}
+              </select>
+              <button class="small ${t.count_in_expense ? "danger" : ""}" onclick="toggleLedgerDrillCount(${t.id}, ${t.count_in_expense ? 0 : 1})">${t.count_in_expense ? "不计入" : "计入"}</button>
+            </td>
+          </tr>`).join("") || '<tr><td colspan="8" class="empty">该分类没有记录</td></tr>';
+        $("#drill-modal").classList.remove("hidden");
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function setLedgerDrillCategory(id, category) {
+      try {
+        await api(`/api/transactions/${id}/category`, { method: "POST", body: { category, remember: true } });
+        showFlash("已更新分类");
+        openLedgerDrill(drillCategory, drillDirection);
+        loadLedgerStats();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function toggleLedgerDrillCount(id, count) {
+      try {
+        await api(`/api/transactions/${id}/count`, { method: "POST", body: { count_in_expense: !!count } });
+        showFlash(count ? "已计入" : "已不计入");
+        openLedgerDrill(drillCategory, drillDirection);
+        loadLedgerStats();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    function currentLedgerItem() {
+      return allLedgers.find((l) => l.name === currentLedger && !l.deleted);
+    }
+    $("#btn-ledger-settings").addEventListener("click", () => {
+      const l = currentLedgerItem();
+      if (!l) { showFlash("请先选择独立账单", true); return; }
+      $("#ledger-include-summary").checked = !!l.include_in_summary;
+      $("#ledger-settings-modal").classList.remove("hidden");
+    });
+    $("#btn-ledger-settings-close").addEventListener("click", () => $("#ledger-settings-modal").classList.add("hidden"));
+    $("#btn-ledger-rename").addEventListener("click", async () => {
+      const l = currentLedgerItem();
+      const name = $("#ledger-rename-input").value.trim();
+      if (!l || !name) { showFlash("请输入新名称", true); return; }
+      try {
+        await api(`/api/ledgers/${l.id}`, { method: "PUT", body: { name, include_in_summary: l.include_in_summary } });
+        currentLedger = name;
+        $("#ledger-rename-input").value = "";
+        showFlash("已重命名");
+        loadLedgers();
+      } catch (err) { showFlash(err.message, true); }
+    });
+    $("#btn-create-ledger").addEventListener("click", async () => {
+      const name = $("#new-ledger-name").value.trim();
+      if (!name) { showFlash("请输入名称", true); return; }
+      try {
+        await api("/api/ledgers", { method: "POST", body: { name } });
+        $("#new-ledger-name").value = "";
+        showFlash("已创建");
+        loadLedgers();
+      } catch (err) { showFlash(err.message, true); }
+    });
+    $("#ledger-include-summary").addEventListener("change", async (e) => {
+      const l = currentLedgerItem();
+      if (!l) return;
+      try { await api(`/api/ledgers/${l.id}`, { method: "PUT", body: { include_in_summary: e.target.checked } }); loadSummary(); loadLedgers(); }
+      catch (err) { showFlash(err.message, true); }
+    });
+    $("#btn-delete-current-ledger").addEventListener("click", async () => {
+      const l = currentLedgerItem();
+      if (!l) return;
+      if (!(await askConfirm(`删除「${l.name}」并移入回收站？`))) return;
+      try {
+        await api(`/api/ledgers/${l.id}`, { method: "DELETE" });
+        $("#ledger-settings-modal").classList.add("hidden");
+        currentLedger = "";
+        loadLedgers();
+      } catch (err) { showFlash(err.message, true); }
+    });
+    $("#btn-ledger-manual").addEventListener("click", () => {
+      if (!currentLedger) { showFlash("请先选择独立账单", true); return; }
+      $("#ledger-manual-modal").classList.remove("hidden");
+    });
+    $("#btn-ledger-manual-close").addEventListener("click", () => $("#ledger-manual-modal").classList.add("hidden"));
+    $("#btn-ledger-manual-save").addEventListener("click", async () => {
+      const direction = $("#lm-direction").value;
+      const amount = $("#lm-amount").value.trim();
+      const transaction_time = $("#lm-time").value;
+      const category = $("#lm-category").value;
+      if (!amount || Number(amount) <= 0) { showFlash("金额必须大于 0", true); return; }
+      if (!transaction_time) { showFlash("请选择时间", true); return; }
+      try {
+        await api("/api/manual/add", {
+          method: "POST",
+          body: {
+            direction, amount, transaction_time, category,
+            counterparty: $("#lm-counterparty").value,
+            description: $("#lm-description").value,
+            payment_method: $("#lm-payment").value,
+            note: $("#lm-note").value,
+            group: "生活",
+            branch: currentLedger,
+          },
+        });
+        showFlash("已添加");
+        $("#ledger-manual-modal").classList.add("hidden");
+        loadLedgerStats();
+        loadLedgers();
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    });
+    $("#btn-ledger-import").addEventListener("click", () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.multiple = true;
+      input.accept = ".csv,.xlsx,.xls";
+      input.onchange = async () => {
+        if (!input.files.length || !currentLedger) return;
+        const fd = new FormData();
+        for (const f of input.files) fd.append("files", f);
+        fd.append("branch", currentLedger);
+        try {
+          const data = await api("/api/import", { method: "POST", body: fd });
+          renderImportResults(data.results);
+          showFlash("导入完成");
+          loadLedgerStats();
+          loadLedgers();
+          loadSummary();
+        } catch (err) { showFlash(err.message, true); }
+      };
+      input.click();
+    });
+    async function toggleLedgerSummary(id, value) {
+      try { await api(`/api/ledgers/${id}`, { method: "PUT", body: { include_in_summary: !!value } }); loadLedgers(); loadSummary(); }
+      catch (err) { showFlash(err.message, true); }
+    }
+    async function deleteLedger(id) {
+      if (!(await askConfirm("删除后进入回收站，确定删除这个独立账单吗？"))) return;
+      try { await api(`/api/ledgers/${id}`, { method: "DELETE" }); showFlash("已移入回收站"); loadLedgers(); loadSummary(); }
+      catch (err) { showFlash(err.message, true); }
+    }
+    async function restoreLedger(id) {
+      try { await api(`/api/ledgers/${id}/restore`, { method: "POST" }); showFlash("已恢复"); loadLedgers(); }
+      catch (err) { showFlash(err.message, true); }
+    }
+    async function dissolveLedger(id, mode) {
+      if (!(await askConfirm("把该账本里的账单移入总汇总？", { danger: false }))) return;
+      try { await api(`/api/ledgers/${id}/dissolve`, { method: "POST", body: { mode } }); showFlash("已移入总汇总"); loadLedgers(); loadDetail(); loadSummary(); }
+      catch (err) { showFlash(err.message, true); }
+    }
+    function openLedger(name) {
+      currentLedger = name;
+      switchPage("income");
+      loadLedgerStats();
+    }
+    function ledgerOptions(currentBranch) {
+      return allLedgers.filter((l) => !l.deleted).map((l) =>
+        `<option value="${esc(l.name)}" ${currentBranch === l.name ? "selected" : ""}>${esc(l.name)}</option>`
+      ).join("");
+    }
+    async function setBranch(id, branch) {
+      try {
+        await api(`/api/transactions/${id}/branch`, { method: "POST", body: { branch } });
+        showFlash(branch === "生活" ? "已移回总账本" : `已移到${branch}`);
+        loadDetail();
+        loadLedgers();
+        loadSummary();
+        if (currentLedger) loadLedgerStats();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    function moveBranchPrompt(id, currentBranch) {
+      const target = currentBranch === "生活"
+        ? (prompt("输入要移入的独立账单名称") || "").trim()
+        : "生活";
+      if (!target) { showFlash("未输入账本名称", true); return; }
+      setBranch(id, target);
+    }
+    async function moveBranchFromGrowth(id) {
+      await setBranch(id, "生活");
+    }
+
+    async function uploadFiles(files) {
+      const fd = new FormData();
+      for (const f of files) fd.append("files", f);
+      $("#import-results").innerHTML = '<div class="panel muted">正在导入，请稍候…</div>';
+      try {
+        const data = await api("/api/import", { method: "POST", body: fd });
+        renderImportResults(data.results);
+        showFlash("导入完成");
+      } catch (err) {
+        showFlash(err.message, true);
+        $("#import-results").innerHTML = "";
+      } finally {
+        fileInput.value = "";
+      }
+    }
+
+    function renderImportResults(results) {
+      const box = $("#import-results");
+      box.innerHTML = results.map((r) => {
+        if (r.error) {
+          return `<div class="panel"><h2>${esc(r.filename)}</h2><div class="badge red">失败</div><div>${esc(r.error)}</div></div>`;
+        }
+        const src = sourceName[r.source] || "未知";
+        const warnings = (r.warnings || []).map((w) =>
+          `<div>第 ${w.line} 行 · ${esc(w.reason)}\n原文：${esc(w.raw)}</div>`).join("\n");
+        return `<div class="panel">
+          <h2>${esc(r.filename)}</h2>
+          <div>
+            <span class="badge">${esc(src)}</span>
+            <span class="badge green">新增 ${r.inserted} 条</span>
+            <span class="badge gray">已存在，跳过 ${r.skipped} 条</span>
+            ${r.auto_merged ? `<span class="badge amber">自动合并 ${r.auto_merged} 对</span>` : ""}
+            <span class="badge gray">${r.encoding ? esc(r.encoding) : "Excel"}</span>
+          </div>
+          ${warnings ? `<div class="warnings">${warnings}</div>` : ""}
+        </div>`;
+      }).join("");
+    }
+
+    // ---------------- 待确认 ----------------
+    let pendingData = null;
+    let completedPending = new Set();
+    async function loadPending() {
+      try {
+        const data = await api("/api/pending");
+        pendingData = data;
+        completedPending = new Set();
+        renderPending();
+        await loadRules();
+        await loadCategories();
+      } catch (err) {
+        showFlash(err.message, true);
+      }
+    }
+
+    function txCard(t) {
+      return `<div class="tx-card">
+        <div style="margin-bottom:8px;">
+          <strong>${esc(t.transaction_time || "")}</strong>
+          <span class="badge">${esc(sourceName[t.source] || t.source)}</span>
+          <span class="amount ${dirClass[t.direction] || "neutral"}">¥${Number(t.amount || 0).toFixed(2)}</span>
+        </div>
+        <div class="tx-detail-grid">
+          <span class="k">交易对方</span><span>${esc(t.counterparty || "—")}</span>
+          <span class="k">说明/摘要</span><span>${esc(t.description || "—")}</span>
+          <span class="k">交易类型</span><span>${esc(t.type || "—")}</span>
+          <span class="k">支付方式</span><span>${esc(t.payment_method || "—")}</span>
+          <span class="k">交易状态</span><span>${esc(t.status || "—")}</span>
+          <span class="k">交易单号</span><span>${esc(t.transaction_no || "—")}</span>
+          <span class="k">商户单号</span><span>${esc(t.merchant_no || "—")}</span>
+          <span class="k">备注</span><span>${esc(t.note || "—")}</span>
+          <span class="k">币种</span><span>${esc(t.currency || "—")}</span>
+          <span class="k">余额</span><span>${esc(t.balance || "—")}</span>
+          <span class="k">分类</span><span>${esc(t.category || "—")}</span>
+          <span class="k">计入支出</span><span>${t.count_in_expense ? "是" : `否${t.exclude_reason ? "（" + esc(t.exclude_reason) + "）" : ""}`}</span>
+        </div>
+        <div class="small" style="margin-top:8px;">原始行：</div>
+        <div class="mono small" style="white-space:pre-wrap;background:#f8fafc;padding:8px;border-radius:6px;">${esc(t.raw_line || "—")}</div>
+      </div>`;
+    }
+
+    function renderPending() {
+      const data = pendingData || { candidates: [], unclassified: [], unclassified_items: [] };
+      const box = $("#pending-content");
+      const items = [];
+      for (const t of data.unclassified_items || []) {
+        items.push({ key: "u-" + t.id, type: "unclassified", data: t });
+      }
+      for (const c of data.candidates || []) {
+        items.push({ key: "c-" + c.id, type: "candidate", data: c });
+      }
+      const active = items.filter((it) => !completedPending.has(it.key));
+      const done = items.filter((it) => completedPending.has(it.key));
+
+      const renderItem = (it) => {
+        if (it.type === "unclassified") {
+          const t = it.data;
+          return `<details class="queue-item" data-key="${it.key}">
+            <summary>
+              <span class="q-type badge gray">未分类</span>
+              <span class="q-amount">¥${Number(t.amount || 0).toFixed(2)}</span>
+              <span class="q-main">${esc(t.transaction_time || "")} · ${esc(t.payment_method || "—")} · ${esc(t.counterparty || "—")}</span>
+            </summary>
+            <div class="q-body">
+              ${txCard(t)}
+              <div class="row" style="margin-top:10px;">
+                ${allCategories.map((c) => `<button class="small" onclick="classifyPendingItem(${t.id}, '${esc(c)}')">${c}</button>`).join(" ")}
+                <button class="small danger" onclick="excludePendingItem(${t.id})">设为不计入</button>
+              </div>
+            </div>
+          </details>`;
+        }
+        const c = it.data;
+        return `<details class="queue-item candidate" data-key="${it.key}">
+          <summary>
+            <span class="q-type badge amber">疑似重复</span>
+            <span class="q-amount">¥${Number(c.a.amount || 0).toFixed(2)}</span>
+            <span class="q-main">${esc(c.a.transaction_time || "")} · ${esc(c.a.payment_method || "—")} · ${esc(c.a.counterparty || "—")}</span>
+          </summary>
+          <div class="q-body">
+            <div class="small" style="margin:6px 0;">${esc(c.reason)}</div>
+            <div class="two-cols">${txCard(c.a)}${txCard(c.b)}</div>
+            <div class="row" style="margin-top:10px;">
+              <button class="primary small" onclick="mergeCandidate(${c.id})">合并这两笔</button>
+              <button class="small" onclick="ignoreCandidate(${c.id})">忽略</button>
+            </div>
+          </div>
+        </details>`;
+      };
+
+      box.innerHTML = `
+        <div class="panel">
+          <h2>待处理</h2>
+          <div class="queue-list">${active.map(renderItem).join("") || '<div class="empty">全部处理完成</div>'}</div>
+          ${done.length ? `<h2 style="margin-top:24px;">本次已完成</h2><div class="queue-list done-list">${done.map(renderItem).join("")}</div>` : ""}
+        </div>`;
+    }
+
+    async function mergeCandidate(id) {
+      try {
+        await api(`/api/dedup/candidates/${id}/merge`, { method: "POST" });
+        completedPending.add("c-" + id);
+        showFlash("已合并");
+        renderPending();
+        loadDetail();
+      }
+      catch (err) { showFlash(err.message, true); }
+    }
+    async function ignoreCandidate(id) {
+      try {
+        await api(`/api/dedup/candidates/${id}/ignore`, { method: "POST" });
+        completedPending.add("c-" + id);
+        showFlash("已忽略");
+        renderPending();
+      }
+      catch (err) { showFlash(err.message, true); }
+    }
+    async function classifyPendingItem(txId, category) {
+      try {
+        await api(`/api/transactions/${txId}/category`, { method: "POST", body: { category, remember: true } });
+        completedPending.add("u-" + txId);
+        showFlash("已分类");
+        renderPending();
+        loadDetail();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function excludePendingItem(txId) {
+      try {
+        await api(`/api/transactions/${txId}/count`, { method: "POST", body: { count_in_expense: false, exclude_reason: "在待确认页设为不计入" } });
+        completedPending.add("u-" + txId);
+        showFlash("已设为不计入");
+        renderPending();
+        loadDetail();
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    function renderBatchGroups() {
+      const groups = (pendingData && pendingData.unclassified) || [];
+      $("#batch-list").innerHTML = groups.map((m) => `
+        <div class="batch-row">
+          <div class="batch-info">
+            <strong>${esc(m.counterparty)}</strong>
+            <span class="badge gray">${m.count} 笔</span>
+            <span class="amount expense">¥${Number(m.total).toFixed(2)}</span>
+          </div>
+          <div class="batch-actions">
+            ${allCategories.map((c) => `<button class="small" data-cp="${esc(m.counterparty)}" data-cat="${c}" onclick="classifyMerchant(this.dataset.cp, this.dataset.cat)">${c}</button>`).join(" ")}
+          </div>
+        </div>`).join("") || '<div class="empty">没有可批量分类的商户</div>';
+    }
+    $("#btn-batch-classify").addEventListener("click", () => {
+      renderBatchGroups();
+      $("#batch-modal").classList.remove("hidden");
+    });
+    $("#btn-batch-close").addEventListener("click", () => $("#batch-modal").classList.add("hidden"));
+    $("#btn-auto-classify").addEventListener("click", async () => {
+      try {
+        const r = await api("/api/auto-classify", { method: "POST" });
+        showFlash(`自动分类完成，更新 ${r.changed} 条`);
+        loadPending();
+        loadDetail();
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    });
+    async function classifyMerchant(counterparty, category) {
+      try {
+        await api("/api/classify/merchant", { method: "POST", body: { counterparty, category } });
+        showFlash(`已将「${counterparty}」全部归为 ${category}`);
+        $("#batch-modal").classList.add("hidden");
+        loadPending();
+      } catch (err) { showFlash(err.message, true); }
+    }
+
+    async function loadRules() {
+      try {
+        const data = await api("/api/merchant-rules");
+        $("#rules-list").innerHTML = (data.items || []).map((r) => `
+          <div class="row" style="padding:5px 0;">
+            <span class="badge">${esc(r.counterparty)}</span>
+            ${r.match_text ? `<span class="badge gray">匹配：${esc(r.match_text)}</span>` : ""}
+            <span>→</span>
+            <span class="badge green">${esc(r.category)}</span>
+            <button class="link small" onclick="deleteRule(${r.id})">删除</button>
+          </div>`).join("") || '<div class="empty">暂无记忆规则</div>';
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function deleteRule(id) {
+      try { await api(`/api/merchant-rules/${id}`, { method: "DELETE" }); loadRules(); showFlash("已删除规则"); }
+      catch (err) { showFlash(err.message, true); }
+    }
+
+    let customCategories = [];
+    let growthCategories = [];
+    let allLedgers = [];
+    let currentLedger = "";
+    async function loadCategories() {
+      try {
+        const data = await api("/api/categories");
+        const custom = data.custom || [];
+        customCategories = custom;
+        growthCategories = [];
+        const base = data.base || ["吃饭", "玩乐", "学习", "购物", "其他"];
+        const baseWithoutOther = base.filter((c) => c !== "其他");
+        allCategories = [
+          ...baseWithoutOther,
+          ...custom.map((c) => c.name),
+          "其他",
+        ];
+        const filterSelect = $("#filter-category");
+        const current = filterSelect.value;
+        filterSelect.innerHTML =
+          '<option value="">全部分类</option>' +
+          allCategories.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+        filterSelect.value = current;
+        $("#lm-category").innerHTML = allCategories.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+        renderCategoryManagement();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    function renderCategoryManagement() {
+      $("#categories-list").innerHTML = customCategories.map((c) => `
+        <span class="tag">${esc(c.name)}
+          <button class="tag-del" title="重命名" onclick="renameCategory(${c.id}, '${esc(c.name)}')">改</button>
+          <button class="tag-del" title="删除分类" onclick="deleteCategory(${c.id})">×</button>
+        </span>
+      `).join("") || '<div class="empty">还没有自定义分类</div>';
+    }
+    async function createCategory() {
+      const name = $("#new-category-name").value.trim();
+      if (!name) { showFlash("请输入分类名", true); return; }
+      try {
+        await api("/api/categories", { method: "POST", body: { name } });
+        $("#new-category-name").value = "";
+        showFlash("已添加分类");
+        await loadCategories();
+        loadDetail();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function deleteCategory(id) {
+      if (!(await askConfirm("删除这个分类后，该分类下的记录会自动改为“其他”，确定删除吗？"))) return;
+      try {
+        await api(`/api/categories/${id}`, { method: "DELETE" });
+        showFlash("已删除分类");
+        await loadCategories();
+        loadDetail();
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function renameCategory(id, oldName) {
+      const name = (prompt("输入新分类名", oldName) || "").trim();
+      if (!name || name === oldName) return;
+      try {
+        await api(`/api/categories/${id}`, { method: "PUT", body: { name } });
+        showFlash("已重命名");
+        await loadCategories();
+        loadDetail();
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    $("#btn-add-category").addEventListener("click", createCategory);
+    $("#new-category-name").addEventListener("keydown", (e) => { if (e.key === "Enter") createCategory(); });
+    $("#btn-open-categories").addEventListener("click", async () => {
+      await loadCategories();
+      $("#category-modal").classList.remove("hidden");
+    });
+    $("#btn-open-rules").addEventListener("click", async () => {
+      await loadRules();
+      $("#rules-modal").classList.remove("hidden");
+    });
+    $("#btn-category-close").addEventListener("click", () => {
+      $("#category-modal").classList.add("hidden");
+    });
+    $("#btn-rules-close").addEventListener("click", () => {
+      $("#rules-modal").classList.add("hidden");
+    });
+
+    async function loadMergeGroups() {
+      try {
+        const data = await api("/api/merge-groups");
+        renderMergeGroups(data.groups || []);
+      } catch (err) { showFlash(err.message, true); }
+    }
+    function txMini(t) {
+      return `<div class="tx-card">
+        <div><strong>${esc(t.transaction_time || "")}</strong> <span class="badge">${esc(sourceName[t.source] || t.source)}</span></div>
+        <div>${esc(t.counterparty || "—")} · ${esc(t.description || "—")}</div>
+        <div class="amount ${dirClass[t.direction] || "neutral"}">¥${Number(t.amount || 0).toFixed(2)}</div>
+        <div class="small">${esc(t.payment_method || "")} ${esc(t.note || "")}</div>
+      </div>`;
+    }
+    function renderMergeGroups(groups) {
+      $("#merge-groups-list").innerHTML = groups.map((g) => `
+        <div class="candidate" style="margin-top:12px;">
+          <div class="two-cols">
+            <div>
+              <div class="badge green">主记录</div>
+              ${txCard(g.primary)}
+            </div>
+            <div>
+              ${g.secondaries.map((s) => `
+                <div style="margin-bottom:8px;">
+                  <div class="badge gray">被合并</div>
+                  ${txCard(s)}
+                  <button class="link small danger" onclick="unmergeFromMerge(${g.primary.id}, ${s.id})">撤销合并</button>
+                </div>`).join("")}
+            </div>
+          </div>
+        </div>`).join("") || '<div class="empty">还没有合并记录</div>';
+    }
+    async function unmergeFromMerge(primaryId, secondaryId) {
+      try {
+        await api("/api/unmerge", { method: "POST", body: { primary_id: primaryId, secondary_id: secondaryId } });
+        showFlash("已撤销合并");
+        loadMergeGroups();
+        loadDetail();
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    }
+
+    async function loadExcluded() {
+      try {
+        const data = await api("/api/transactions?count_in_expense=0");
+        const items = data.items || [];
+        $("#excluded-list").innerHTML = items.length ? `
+          <table>
+            <thead><tr><th>时间</th><th>来源</th><th>交易对方</th><th>说明</th><th>金额</th><th>操作</th></tr></thead>
+            <tbody>${items.map((t) => `
+              <tr>
+                <td class="mono">${esc(t.transaction_time || "")}</td>
+                <td>${esc(sourceName[t.source] || t.source)}</td>
+                <td>${esc(t.counterparty || "—")}</td>
+                <td>${esc(t.description || "—")}</td>
+                <td class="amount ${dirClass[t.direction] || "neutral"}">¥${Number(t.amount || 0).toFixed(2)}</td>
+                <td><button class="small" onclick="restoreExcluded(${t.id})">恢复计入</button></td>
+              </tr>`).join("")}</tbody>
+          </table>` : '<div class="empty">没有不计入的账单</div>';
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function restoreExcluded(id) {
+      try {
+        await api(`/api/transactions/${id}/count`, { method: "POST", body: { count_in_expense: true } });
+        showFlash("已恢复计入");
+        loadExcluded();
+        loadDetail();
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    }
+
+    $("#btn-open-merges").addEventListener("click", async () => {
+      await loadMergeGroups();
+      $("#merge-modal").classList.remove("hidden");
+    });
+    $("#btn-merge-close").addEventListener("click", () => $("#merge-modal").classList.add("hidden"));
+    $("#btn-open-excluded").addEventListener("click", async () => {
+      await loadExcluded();
+      $("#excluded-modal").classList.remove("hidden");
+    });
+    $("#btn-excluded-close").addEventListener("click", () => $("#excluded-modal").classList.add("hidden"));
+
+    // ---------------- 明细 ----------------
+    let detailState = { selected: new Set(), items: [] };
+    const DETAIL_COLUMNS = [
+      { key: "time", label: "时间" },
+      { key: "source", label: "来源" },
+      { key: "counterparty", label: "交易对方" },
+      { key: "description", label: "说明/摘要" },
+      { key: "category", label: "分类" },
+      { key: "amount", label: "金额" },
+      { key: "direction", label: "方向" },
+      { key: "count", label: "计入" },
+      { key: "payment_method", label: "支付方式" },
+      { key: "merge", label: "合并" },
+      { key: "actions", label: "操作" },
+    ];
+    let visibleColumns = new Set(DETAIL_COLUMNS.map((c) => c.key));
+
+    async function loadMonths() {
+      try {
+        const s = await api("/api/summary");
+        const opts = ["<option value=''>全部月份</option>"];
+        for (const m of s.available_months || []) opts.push(`<option value="${m}">${m}</option>`);
+        $("#filter-month").innerHTML = opts.join("");
+        const sumOpts = [];
+        for (const m of s.available_months || []) sumOpts.push(`<option value="${m}">${m}</option>`);
+        $("#summary-month").innerHTML = sumOpts.join("");
+        if (s.available_months && s.available_months.length) {
+          $("#summary-month").value = s.available_months[0];
+        }
+      } catch (err) { showFlash(err.message, true); }
+    }
+
+    async function loadDetail() {
+      const q = new URLSearchParams();
+      if ($("#filter-month").value) q.set("month", $("#filter-month").value);
+      if ($("#filter-source").value) q.set("source", $("#filter-source").value);
+      if ($("#filter-branch").value) q.set("branch", $("#filter-branch").value);
+      if ($("#filter-category").value) q.set("category", $("#filter-category").value);
+      if ($("#filter-count").value) q.set("count_in_expense", $("#filter-count").value);
+      if ($("#filter-keyword").value.trim()) q.set("keyword", $("#filter-keyword").value.trim());
+      try {
+        const data = await api("/api/transactions?" + q.toString());
+        detailState.items = (data.items || []).filter((t) => !t.is_duplicate);
+        detailState.selected = new Set();
+        renderDetail();
+      } catch (err) { showFlash(err.message, true); }
+    }
+
+    function renderDetail() {
+      const body = $("#detail-body");
+      if (!detailState.items.length) {
+        body.innerHTML = "";
+        $("#detail-empty").classList.remove("hidden");
+        return;
+      }
+      $("#detail-empty").classList.add("hidden");
+      body.innerHTML = detailState.items.map((t) => {
+        const checked = detailState.selected.has(t.id) ? "checked" : "";
+        const merge = (t.merge_sources || []).length > 1
+          ? '<span class="merged-chip" title="已合并">✓</span>'
+          : (t.is_duplicate ? '<span class="badge gray">✓</span>' : "");
+        const undoBtn = t.is_duplicate
+          ? `<button class="link small" onclick="unmerge(${t.duplicate_of}, ${t.id})">撤销合并</button>`
+          : "";
+        if (t.is_duplicate) {
+          return `<tr class="duplicate-row">
+            <td></td>
+            <td colspan="${visibleColumns.size}">
+              <details>
+                <summary>被合并 · ${esc(t.transaction_time || "")} · ${esc(sourceName[t.source] || t.source)} · ${esc(t.counterparty || "")} · ¥${Number(t.amount || 0).toFixed(2)} ${undoBtn}</summary>
+                <div class="mono" style="margin-top:8px;white-space:pre-wrap;">${esc(t.raw_line || "")}</div>
+              </details>
+            </td>
+          </tr>`;
+        }
+        const countBadge = t.count_in_expense
+          ? '<span class="badge green">计入</span>'
+          : '<span class="badge red">不计入</span>';
+        const timeText = t.transaction_time || "";
+        const timeParts = timeText.split(" ");
+        const datePart = timeParts[0] || "";
+        const timePart = timeParts[1] || "";
+        return `<tr>
+          <td><input type="checkbox" class="tx-check" value="${t.id}" ${checked}></td>
+          <td data-col="time" class="mono"><div class="nowrap">${esc(datePart)}</div><div class="small nowrap">${esc(timePart)}</div></td>
+          <td data-col="source" class="nowrap">${esc(sourceName[t.source] || t.source)}</td>
+          <td data-col="counterparty">${esc(t.counterparty || "")}</td>
+          <td data-col="description">${esc(t.description || "")}</td>
+          <td data-col="category"><select onchange="setCategory(${t.id}, this.value)">
+            ${allCategories.map((c) => `<option value="${c}" ${t.category === c ? "selected" : ""}>${c}</option>`).join("")}
+          </select></td>
+          <td data-col="amount" class="amount ${dirClass[t.direction] || "neutral"}">¥${Number(t.amount || 0).toFixed(2)}</td>
+          <td data-col="direction">${esc(t.direction)}</td>
+          <td data-col="count" class="nowrap">${countBadge}<button class="small ${t.count_in_expense ? "danger" : ""}" onclick="toggleCount(${t.id}, ${t.count_in_expense ? 0 : 1})">${t.count_in_expense ? "不计入" : "计入"}</button></td>
+          <td data-col="payment_method">${esc(t.payment_method || "")}</td>
+          <td data-col="merge">${merge}${undoBtn}</td>
+          <td data-col="actions" class="nowrap">
+            <select class="small" onchange="setBranch(${t.id}, this.value)">
+              <option value="生活" ${t.branch === "生活" ? "selected" : ""}>总账本</option>
+              ${ledgerOptions(t.branch)}
+            </select>
+            <button class="link small danger" onclick="deleteTx(${t.id})">删除</button>
+          </td>
+        </tr>`;
+      }).join("");
+      updateCheckAll();
+      updateSelectionBar();
+      applyColumnVisibility();
+    }
+
+    function updateCheckAll() {
+      const boxes = $$(".tx-check");
+      const all = boxes.length > 0 && boxes.every((b) => b.checked);
+      $("#check-all").checked = all;
+    }
+    function updateSelectionBar() {
+      const count = detailState.selected.size;
+      $("#selection-count").textContent = count;
+      $("#detail-actions").classList.toggle("hidden", count === 0);
+    }
+    function applyColumnVisibility() {
+      $$("#detail-table th[data-col]").forEach((el) => {
+        el.style.display = visibleColumns.has(el.dataset.col) ? "" : "none";
+      });
+      $$("#detail-table tbody td[data-col]").forEach((el) => {
+        el.style.display = visibleColumns.has(el.dataset.col) ? "" : "none";
+      });
+    }
+    function renderColumnOptions() {
+      $("#column-options").innerHTML = DETAIL_COLUMNS.map((c) => `
+        <label class="tag-option">
+          <input type="checkbox" data-col="${c.key}" ${visibleColumns.has(c.key) ? "checked" : ""}>
+          <span>${esc(c.label)}</span>
+        </label>`).join("");
+    }
+    $("#btn-choose-columns").addEventListener("click", () => {
+      renderColumnOptions();
+      $("#column-modal").classList.remove("hidden");
+    });
+    $("#btn-column-close").addEventListener("click", () => $("#column-modal").classList.add("hidden"));
+    $("#btn-column-select-all").addEventListener("click", () => {
+      $$("#column-options input[type=checkbox]").forEach((b) => b.checked = true);
+    });
+    $("#btn-column-select-none").addEventListener("click", () => {
+      $$("#column-options input[type=checkbox]").forEach((b) => b.checked = false);
+    });
+    $("#btn-column-confirm").addEventListener("click", () => {
+      visibleColumns = new Set(
+        $$("#column-options input[type=checkbox]")
+          .filter((b) => b.checked)
+          .map((b) => b.dataset.col)
+      );
+      if (!visibleColumns.size) { showFlash("至少显示一列", true); return; }
+      $("#column-modal").classList.add("hidden");
+      renderDetail();
+    });
+    $("#check-all").addEventListener("change", (e) => {
+      detailState.selected.clear();
+      $$(".tx-check").forEach((b) => {
+        b.checked = e.target.checked;
+        if (e.target.checked) detailState.selected.add(Number(b.value));
+      });
+      updateSelectionBar();
+    });
+    $("#detail-body").addEventListener("change", (e) => {
+      if (e.target.classList.contains("tx-check")) {
+        const id = Number(e.target.value);
+        if (e.target.checked) detailState.selected.add(id); else detailState.selected.delete(id);
+        updateCheckAll();
+        updateSelectionBar();
+      }
+    });
+
+    async function setCategory(id, category) {
+      try {
+        await api(`/api/transactions/${id}/category`, { method: "POST", body: { category, remember: true } });
+        showFlash("已更新分类，并记住该商户");
+        loadDetail();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function toggleCount(id, count) {
+      try {
+        await api(`/api/transactions/${id}/count`, { method: "POST", body: { count_in_expense: !!count } });
+        showFlash(count ? "已改为计入支出" : "已改为不计入支出");
+        loadDetail();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function deleteTx(id) {
+      if (!(await askConfirm("确定删除这条记录吗？原始记录会从明细和汇总中隐藏，但仍保留在数据库。", { confirmText: "删除" }))) return;
+      try { await api(`/api/transactions/${id}/delete`, { method: "POST" }); showFlash("已删除"); loadDetail(); }
+      catch (err) { showFlash(err.message, true); }
+    }
+    async function unmerge(primaryId, secondaryId) {
+      try {
+        await api("/api/unmerge", { method: "POST", body: { primary_id: primaryId, secondary_id: secondaryId } });
+        showFlash("已撤销合并");
+        loadDetail();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function manualMerge() {
+      if (detailState.selected.size !== 2) {
+        showFlash("请先勾选两条记录", true);
+        return;
+      }
+      const [a, b] = Array.from(detailState.selected);
+      try {
+        await api("/api/merge", { method: "POST", body: { primary_id: a, secondary_id: b } });
+        showFlash("已手动合并");
+        loadDetail();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    function clearSelection() {
+      detailState.selected.clear();
+      $$(".tx-check").forEach((b) => b.checked = false);
+      updateCheckAll();
+      updateSelectionBar();
+    }
+    async function batchDeleteSelected() {
+      const ids = Array.from(detailState.selected);
+      if (!ids.length) return;
+      if (!(await askConfirm(`确定删除选中的 ${ids.length} 条记录吗？`, { confirmText: "删除" }))) return;
+      try {
+        await api("/api/transactions/batch-delete", { method: "POST", body: { ids } });
+        showFlash(`已删除 ${ids.length} 条`);
+        clearSelection();
+        loadDetail();
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    function openBatchCategoryModal() {
+      if (!detailState.selected.size) { showFlash("请先勾选记录", true); return; }
+      $("#batch-category-options").innerHTML = allCategories.map((c) =>
+        `<button class="small" data-cat="${esc(c)}" onclick="batchClassifySelected(this.dataset.cat)">${c}</button>`
+      ).join(" ");
+      $("#batch-category-modal").classList.remove("hidden");
+    }
+    async function batchClassifySelected(category) {
+      const ids = Array.from(detailState.selected);
+      if (!ids.length) return;
+      try {
+        await api("/api/transactions/batch-category", { method: "POST", body: { ids, category } });
+        showFlash(`已将 ${ids.length} 条归为 ${category}`);
+        $("#batch-category-modal").classList.add("hidden");
+        clearSelection();
+        loadDetail();
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    $("#btn-batch-delete").addEventListener("click", batchDeleteSelected);
+    $("#btn-batch-category").addEventListener("click", openBatchCategoryModal);
+    $("#btn-batch-category-close").addEventListener("click", () => $("#batch-category-modal").classList.add("hidden"));
+    $("#btn-selection-clear").addEventListener("click", clearSelection);
+    $("#btn-filter").addEventListener("click", loadDetail);
+    $("#btn-reset").addEventListener("click", () => {
+      $("#filter-month").value = "";
+      $("#filter-source").value = "";
+      $("#filter-branch").value = "生活";
+      $("#filter-category").value = "";
+      $("#filter-count").value = "";
+      $("#filter-keyword").value = "";
+      loadDetail();
+    });
+    $("#btn-manual-merge").addEventListener("click", manualMerge);
+
+    // ---------------- 汇总 ----------------
+    async function loadSummary() {
+      try {
+        const month = $("#summary-month").value || "";
+        const q = month ? `?month=${month}` : "";
+        const data = await api("/api/summary" + q);
+        renderSummary(data);
+      } catch (err) { showFlash(err.message, true); }
+    }
+    function renderSummary(s) {
+      $("#summary-total").textContent = "¥" + Number(s.total).toFixed(2);
+      const count = s.categories.reduce((a, c) => a + (c.count || 0), 0);
+      $("#summary-meta").textContent =
+        `${s.month} · 收入 ¥${Number(s.total_income || 0).toFixed(2)} · ` +
+        `支出 ¥${Number(s.total_expense || 0).toFixed(2)} · 共 ${count} 笔记录`;
+      const prev = s.prev_pct == null ? "--" : (s.prev_pct > 0 ? "+" : "") + s.prev_pct + "%";
+      $("#stat-prev").textContent = prev;
+      $("#stat-prev-hint").textContent = `上月净消费 ¥${Number(s.prev_total || 0).toFixed(2)}`;
+      const hist = s.hist_pct == null ? "--" : (s.hist_pct > 0 ? "+" : "") + s.hist_pct + "%";
+      $("#stat-hist").textContent = hist;
+      $("#stat-hist-hint").textContent = s.hist_avg == null ? "暂无历史数据" : `历史月均净消费 ¥${Number(s.hist_avg).toFixed(2)}`;
+      const bars = s.categories.map((c) => {
+        const pct = Math.max(0, Math.min(100, c.percent));
+        return `<div class="cat-row" data-cat="${esc(c.category)}" data-month="${esc(s.month)}" onclick="openDrill(this.dataset.cat, this.dataset.month)" style="cursor:pointer;">
+          <div class="cat-name">${esc(c.category)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${catColors[c.category] || "#94a3b8"}"></div></div>
+          <div class="cat-amt">¥${Number(c.amount).toFixed(2)} · ${c.percent}%</div>
+        </div>`;
+      }).join("");
+      $("#category-bars").innerHTML = bars || '<div class="empty">本月没有计入收支的记录</div>';
+    }
+    let drillCategory = "";
+    let drillMonth = "";
+    let drillDirection = "";
+    async function openDrill(category, month) {
+      drillCategory = category;
+      drillMonth = month;
+      $("#drill-title").textContent = `${month} · ${category} · 明细`;
+      try {
+        const q = new URLSearchParams({ month, category, branch: "__summary__" });
+        const data = await api("/api/transactions?" + q.toString());
+        const items = (data.items || []).filter((t) => !t.is_duplicate);
+        $("#drill-body").innerHTML = items.map((t) => `
+          <tr>
+            <td class="mono">${esc(t.transaction_time || "")}</td>
+            <td>${esc(sourceName[t.source] || t.source)}</td>
+            <td>${esc(t.counterparty || "—")}</td>
+            <td>${esc(t.description || "—")}</td>
+            <td class="amount ${dirClass[t.direction] || "neutral"}">¥${Number(t.amount || 0).toFixed(2)}</td>
+            <td>${esc(t.direction)}</td>
+            <td><select onchange="setCategoryFromDrill(${t.id}, this.value)">
+              ${allCategories.map((c) => `<option value="${c}" ${t.category === c ? "selected" : ""}>${c}</option>`).join("")}
+            </select></td>
+            <td class="nowrap">
+              <select class="small" onchange="setBranch(${t.id}, this.value)">
+                <option value="生活" ${t.branch === "生活" ? "selected" : ""}>总账本</option>
+                ${ledgerOptions(t.branch)}
+              </select>
+              ${t.count_in_expense ? '<span class="badge green">计入</span>' : '<span class="badge red">不计入</span>'}
+              <button class="small ${t.count_in_expense ? "danger" : ""}" onclick="toggleCountFromDrill(${t.id}, ${t.count_in_expense ? 0 : 1})">${t.count_in_expense ? "不计入" : "计入"}</button>
+            </td>
+          </tr>`).join("") || '<tr><td colspan="8" class="empty">该分类没有记录</td></tr>';
+        $("#drill-modal").classList.remove("hidden");
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function setCategoryFromDrill(id, category) {
+      try {
+        await api(`/api/transactions/${id}/category`, { method: "POST", body: { category, remember: true } });
+        showFlash("已更新分类");
+        openDrill(drillCategory, drillMonth);
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    async function toggleCountFromDrill(id, count) {
+      try {
+        await api(`/api/transactions/${id}/count`, { method: "POST", body: { count_in_expense: !!count } });
+        showFlash(count ? "已计入" : "已不计入");
+        openDrill(drillCategory, drillMonth);
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    $("#btn-drill-close").addEventListener("click", () => $("#drill-modal").classList.add("hidden"));
+    $("#btn-drill-to-detail").addEventListener("click", () => {
+      $("#drill-modal").classList.add("hidden");
+      $("#filter-month").value = drillMonth;
+      $("#filter-category").value = drillCategory;
+      switchPage("detail");
+    });
+    $("#summary-month").addEventListener("change", loadSummary);
+    $("#btn-summary-refresh").addEventListener("click", loadSummary);
+    const EXPORT_FIELDS = [
+      { key: "source", label: "来源" },
+      { key: "transaction_time", label: "交易时间" },
+      { key: "month", label: "年-月" },
+      { key: "amount", label: "金额" },
+      { key: "direction", label: "收支方向" },
+      { key: "counterparty", label: "交易对方" },
+      { key: "description", label: "说明/摘要" },
+      { key: "type", label: "交易类型" },
+      { key: "payment_method", label: "支付方式" },
+      { key: "status", label: "交易状态" },
+      { key: "transaction_no", label: "交易单号" },
+      { key: "merchant_no", label: "商户单号" },
+      { key: "note", label: "备注" },
+      { key: "currency", label: "币种" },
+      { key: "balance", label: "余额" },
+      { key: "category", label: "分类" },
+      { key: "category_source", label: "分类来源" },
+      { key: "count_in_expense", label: "是否计入支出" },
+      { key: "exclude_reason", label: "不计入原因" },
+      { key: "tags", label: "标签" },
+      { key: "is_duplicate", label: "是否重复" },
+      { key: "duplicate_of", label: "重复指向" },
+      { key: "merge_sources", label: "合并来源" },
+      { key: "raw_line", label: "原始行" },
+    ];
+    let exportMonth = "";
+    function renderExportFields() {
+      $("#export-fields").innerHTML = EXPORT_FIELDS.map((f) => `
+        <label class="tag-option">
+          <input type="checkbox" data-key="${f.key}" checked>
+          <span>${esc(f.label)}</span>
+        </label>`).join("");
+    }
+    function openExportModal(month) {
+      exportMonth = month || "";
+      renderExportFields();
+      $("#export-modal").classList.remove("hidden");
+    }
+    function getSelectedExportFields() {
+      return $$("#export-fields input[type=checkbox]")
+        .filter((b) => b.checked)
+        .map((b) => b.dataset.key);
+    }
+    $("#btn-export-close").addEventListener("click", () => $("#export-modal").classList.add("hidden"));
+    $("#btn-export-select-all").addEventListener("click", () => $$("#export-fields input[type=checkbox]").forEach((b) => b.checked = true));
+    $("#btn-export-select-none").addEventListener("click", () => $$("#export-fields input[type=checkbox]").forEach((b) => b.checked = false));
+    $("#btn-export-confirm").addEventListener("click", () => {
+      const columns = getSelectedExportFields();
+      if (!columns.length) { showFlash("请至少选择一列", true); return; }
+      $("#export-modal").classList.add("hidden");
+      downloadExport(exportMonth, columns);
+    });
+
+    async function downloadExport(month, columns) {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.save_export) {
+        try {
+          const r = await window.pywebview.api.save_export(month || "", columns);
+          if (r && r.ok) showFlash(`已保存到：${r.path}`);
+          else if (r && r.cancelled) showFlash("已取消导出");
+          else showFlash((r && r.error) || "导出失败", true);
+          return;
+        } catch (err) {
+          showFlash(err.message || "导出失败", true);
+          return;
+        }
+      }
+      try {
+        const params = new URLSearchParams();
+        if (month) params.set("month", month);
+        if (columns && columns.length) params.set("columns", columns.join(","));
+        const q = params.toString() ? `?${params.toString()}` : "";
+        const res = await fetch("/api/export" + q);
+        if (!res.ok) {
+          let msg = "导出失败";
+          try { msg = (await res.json()).error || msg; } catch (_) {}
+          throw new Error(msg);
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `账单分析_${month || "全部"}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showFlash("已开始导出 Excel");
+      } catch (err) { showFlash(err.message, true); }
+    }
+    $("#btn-export-month").addEventListener("click", () => openExportModal($("#summary-month").value));
+    $("#btn-export-all").addEventListener("click", () => openExportModal(""));
+
+    // 全局函数供内联 onclick 调用。
+    window.mergeCandidate = mergeCandidate;
+    window.ignoreCandidate = ignoreCandidate;
+    window.classifyMerchant = classifyMerchant;
+    window.deleteRule = deleteRule;
+    window.deleteCategory = deleteCategory;
+    window.renameCategory = renameCategory;
+    window.setCategory = setCategory;
+    window.toggleCount = toggleCount;
+    window.deleteTx = deleteTx;
+    window.unmerge = unmerge;
+    window.unmergeFromMerge = unmergeFromMerge;
+    window.restoreExcluded = restoreExcluded;
+    window.openDrill = openDrill;
+    window.classifyPendingItem = classifyPendingItem;
+    window.excludePendingItem = excludePendingItem;
+    window.batchClassifySelected = batchClassifySelected;
+    window.setCategoryFromDrill = setCategoryFromDrill;
+    window.toggleCountFromDrill = toggleCountFromDrill;
+    window.openLedgerDrill = openLedgerDrill;
+    window.setLedgerDrillCategory = setLedgerDrillCategory;
+    window.toggleLedgerDrillCount = toggleLedgerDrillCount;
+    window.setBranch = setBranch;
+    window.moveBranchFromGrowth = moveBranchFromGrowth;
+    window.moveBranchPrompt = moveBranchPrompt;
+
+    $("#btn-minimize-window").addEventListener("click", async () => {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.minimize_window) {
+        await window.pywebview.api.minimize_window();
+      }
+    });
+    $("#btn-maximize-window").addEventListener("click", async () => {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.toggle_maximize) {
+        await window.pywebview.api.toggle_maximize();
+      }
+    });
+    $("#btn-close-window").addEventListener("click", async () => {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.close_window) {
+        await window.pywebview.api.close_window();
+      } else {
+        window.close();
+      }
+    });
+
+    (async function init() {
+      try { await api("/api/health"); } catch (_) {}
+      await loadMonths();
+      await loadCategories();
+      await loadLedgers();
+      await loadSummary();
+    })();
+  </script>
+</body>
+</html>
