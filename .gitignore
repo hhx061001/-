@@ -1,9 +1,7 @@
 __pycache__/
 *.py[cod]
-build/
-dist/
+output/
 *.db
 *.sqlite3
 .env
 .env.*
-screen_check.png
