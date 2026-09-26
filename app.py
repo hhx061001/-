@@ -19,6 +19,7 @@ import time
 import uuid
 import webbrowser
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -351,7 +352,9 @@ def month_add(month: str, delta: int) -> str:
 
 def month_list_from_db(conn: sqlite3.Connection) -> List[str]:
     rows = conn.execute(
-        "SELECT DISTINCT month FROM transactions WHERE month != '' AND is_deleted=0 "
+        "SELECT DISTINCT month FROM ("
+        "SELECT month FROM transactions WHERE month != '' AND is_deleted=0 "
+        "UNION SELECT month FROM monthly_budgets) "
         "ORDER BY month DESC"
     ).fetchall()
     return [r["month"] for r in rows]
@@ -454,6 +457,11 @@ def init_db() -> None:
                 include_in_summary INTEGER NOT NULL DEFAULT 0,
                 deleted INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS monthly_budgets (
+                month TEXT PRIMARY KEY,
+                amount_cents INTEGER NOT NULL CHECK(amount_cents > 0)
             );
 
             CREATE UNIQUE INDEX IF NOT EXISTS idx_merchant_rule_items_unique
@@ -1231,6 +1239,18 @@ def compute_summary(month: Optional[str]) -> Dict[str, Any]:
             return income, expense, round(expense - income, 2)
 
         total_income, total_expense, total = monthly_totals(selected)
+        budget_row = conn.execute(
+            "SELECT amount_cents FROM monthly_budgets WHERE month=?", (selected,)
+        ).fetchone()
+        budget = None
+        if budget_row:
+            budget_amount = budget_row["amount_cents"] / 100
+            budget = {
+                "amount": budget_amount,
+                "spent": round(total_expense, 2),
+                "remaining": round(budget_amount - total_expense, 2),
+                "percent": round(total_expense / budget_amount * 100, 1),
+            }
         by_category_rows = conn.execute(
             """
             SELECT category,
@@ -1262,6 +1282,21 @@ def compute_summary(month: Optional[str]) -> Dict[str, Any]:
                 }
             )
 
+        top_expenses = [dict(row) for row in conn.execute(
+            """
+            SELECT id, transaction_time, counterparty, description, category, amount
+            FROM transactions
+            WHERE month=? AND direction='支出' AND is_deleted=0 AND is_duplicate=0
+              AND count_in_expense=1
+              AND (branch='生活' OR branch IN (
+                SELECT name FROM ledgers WHERE include_in_summary=1 AND deleted=0
+              ))
+            ORDER BY amount DESC, ts DESC, id DESC
+            LIMIT 5
+            """,
+            (selected,),
+        ).fetchall()]
+
         prev_month = month_add(selected, -1)
         _prev_income, _prev_expense, prev_total = monthly_totals(prev_month)
         prev_pct = (
@@ -1286,7 +1321,9 @@ def compute_summary(month: Optional[str]) -> Dict[str, Any]:
             "total": round(total, 2),
             "total_income": round(total_income, 2),
             "total_expense": round(total_expense, 2),
+            "budget": budget,
             "categories": by_category,
+            "top_expenses": top_expenses,
             "prev_month": prev_month,
             "prev_total": round(prev_total, 2),
             "prev_pct": prev_pct,
@@ -1803,6 +1840,44 @@ def api_transactions():
 @app.get("/api/summary")
 def api_summary():
     return jsonify(compute_summary(request.args.get("month")))
+
+
+@app.put("/api/budgets/<month>")
+def api_set_budget(month: str):
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+        return api_error("月份格式应为 YYYY-MM")
+    data = request.get_json(silent=True) or {}
+    try:
+        amount = Decimal(str(data.get("amount", "")))
+    except InvalidOperation:
+        return api_error("请输入有效的预算金额")
+    if not amount.is_finite() or amount <= 0 or amount > 1000000000 or amount.as_tuple().exponent < -2:
+        return api_error("预算须为大于 0、最多两位小数的金额")
+    cents = int(amount * 100)
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO monthly_budgets(month, amount_cents) VALUES (?, ?) "
+            "ON CONFLICT(month) DO UPDATE SET amount_cents=excluded.amount_cents",
+            (month, cents),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
+
+
+@app.delete("/api/budgets/<month>")
+def api_delete_budget(month: str):
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+        return api_error("月份格式应为 YYYY-MM")
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM monthly_budgets WHERE month=?", (month,))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
 
 
 @app.get("/api/pending")

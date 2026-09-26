@@ -30,7 +30,7 @@
       line-height: 1.55;
       min-height: 100vh;
     }
-    button, select, input[type=text] {
+    button, select, input[type=text], input[type=number] {
       font: inherit;
       border: 1px solid var(--line);
       border-radius: 10px;
@@ -247,6 +247,10 @@
     .cat-name { width: 62px; flex-shrink: 0; font-weight: 600; }
     .bar-track { flex: 1; height: 22px; background: #eef1f6; border-radius: 6px; overflow: hidden; }
     .bar-fill { height: 100%; border-radius: 6px; min-width: 2px; }
+    .budget-track { height: 14px; background: #eef1f6; border-radius: 7px; overflow: hidden; margin: 12px 0 8px; }
+    .budget-fill { height: 100%; background: var(--brand); border-radius: 7px; }
+    .budget-fill.near { background: var(--amber); }
+    .budget-fill.over { background: var(--danger); }
     .cat-amt { width: 170px; text-align: right; font-size: 13px; }
     .candidate {
       border: 1px solid #fde68a;
@@ -610,6 +614,18 @@
         <div class="big-number" id="summary-total">¥0.00</div>
         <div class="muted" id="summary-meta"></div>
       </div>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between;">
+          <h2 style="margin:0;">月度支出预算</h2>
+          <span class="small">按计入汇总的支出计算</span>
+        </div>
+        <div class="row" style="margin-top:14px;">
+          <input type="number" id="budget-amount" min="0.01" max="1000000000" step="0.01" placeholder="输入本月预算金额" aria-label="本月预算金额">
+          <button class="primary" id="btn-budget-save">保存预算</button>
+          <button id="btn-budget-delete" class="hidden">清除预算</button>
+        </div>
+        <div id="budget-progress" aria-live="polite"></div>
+      </div>
       <div class="stat-grid" style="margin-bottom:18px;">
         <div class="stat">
           <div class="label">环比上月</div>
@@ -625,6 +641,10 @@
       <div class="panel">
         <h2>花在哪</h2>
         <div id="category-bars"></div>
+      </div>
+      <div class="panel">
+        <h2>本月大额支出 Top 5</h2>
+        <div id="top-expenses"></div>
       </div>
     </section>
   </main>
@@ -1624,11 +1644,13 @@
         for (const m of s.available_months || []) opts.push(`<option value="${m}">${m}</option>`);
         $("#filter-month").innerHTML = opts.join("");
         const sumOpts = [];
-        for (const m of s.available_months || []) sumOpts.push(`<option value="${m}">${m}</option>`);
-        $("#summary-month").innerHTML = sumOpts.join("");
-        if (s.available_months && s.available_months.length) {
-          $("#summary-month").value = s.available_months[0];
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        for (const m of [...new Set([currentMonth, s.month, ...(s.available_months || [])])].sort().reverse()) {
+          sumOpts.push(`<option value="${m}">${m}</option>`);
         }
+        $("#summary-month").innerHTML = sumOpts.join("");
+        $("#summary-month").value = s.month;
       } catch (err) { showFlash(err.message, true); }
     }
 
@@ -1879,6 +1901,19 @@
       $("#summary-meta").textContent =
         `${s.month} · 收入 ¥${Number(s.total_income || 0).toFixed(2)} · ` +
         `支出 ¥${Number(s.total_expense || 0).toFixed(2)} · 共 ${count} 笔记录`;
+      $("#budget-amount").value = s.budget ? Number(s.budget.amount).toFixed(2) : "";
+      $("#btn-budget-delete").classList.toggle("hidden", !s.budget);
+      if (s.budget) {
+        const b = s.budget;
+        const level = b.percent >= 100 ? "over" : b.percent >= 80 ? "near" : "";
+        const status = b.remaining < 0
+          ? `超出预算 ¥${Math.abs(b.remaining).toFixed(2)}`
+          : `还可支出 ¥${Number(b.remaining).toFixed(2)}`;
+        $("#budget-progress").innerHTML = `<div class="budget-track"><div class="budget-fill ${level}" style="width:${Math.max(0, Math.min(100, b.percent))}%"></div></div>
+          <div class="row" style="justify-content:space-between;"><span>已支出 ¥${Number(b.spent).toFixed(2)} / 预算 ¥${Number(b.amount).toFixed(2)}</span><strong>${status} · ${Number(b.percent).toFixed(1)}%</strong></div>`;
+      } else {
+        $("#budget-progress").innerHTML = '<p class="muted" style="margin-bottom:0;">尚未设置本月预算</p>';
+      }
       const prev = s.prev_pct == null ? "--" : (s.prev_pct > 0 ? "+" : "") + s.prev_pct + "%";
       $("#stat-prev").textContent = prev;
       $("#stat-prev-hint").textContent = `上月净消费 ¥${Number(s.prev_total || 0).toFixed(2)}`;
@@ -1894,6 +1929,15 @@
         </div>`;
       }).join("");
       $("#category-bars").innerHTML = bars || '<div class="empty">本月没有计入收支的记录</div>';
+      $("#top-expenses").innerHTML = (s.top_expenses || []).map((t, i) => `
+        <div class="cat-row" style="border-bottom:1px solid var(--line);padding:10px 4px;">
+          <span class="muted" style="width:28px;">${i + 1}</span>
+          <div style="flex:1;min-width:0;overflow-wrap:anywhere;">
+            <strong>${esc(t.counterparty || t.description || "未填写交易对方")}</strong>
+            <div class="small">${esc((t.transaction_time || "").slice(0, 10))} · ${esc(t.category || "其他")}</div>
+          </div>
+          <strong class="amount expense">¥${Number(t.amount).toFixed(2)}</strong>
+        </div>`).join("") || '<div class="empty">本月没有计入汇总的支出</div>';
     }
     let drillCategory = "";
     let drillMonth = "";
@@ -1954,6 +1998,23 @@
     });
     $("#summary-month").addEventListener("change", loadSummary);
     $("#btn-summary-refresh").addEventListener("click", loadSummary);
+    $("#btn-budget-save").addEventListener("click", async () => {
+      const month = $("#summary-month").value;
+      const amount = $("#budget-amount").value.trim();
+      try {
+        await api(`/api/budgets/${month}`, { method: "PUT", body: { amount } });
+        await loadSummary();
+        showFlash(`${month} 预算已保存`);
+      } catch (err) { showFlash(err.message, true); }
+    });
+    $("#btn-budget-delete").addEventListener("click", async () => {
+      const month = $("#summary-month").value;
+      try {
+        await api(`/api/budgets/${month}`, { method: "DELETE" });
+        await loadSummary();
+        showFlash(`${month} 预算已清除`);
+      } catch (err) { showFlash(err.message, true); }
+    });
     const EXPORT_FIELDS = [
       { key: "source", label: "来源" },
       { key: "transaction_time", label: "交易时间" },
