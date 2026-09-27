@@ -2,14 +2,16 @@
 """个人账单分析工具 - 后端
 
 本地运行：python app.py
-本地服务默认只监听 127.0.0.1，不联网、不调用外部 API。
+本地服务只监听 127.0.0.1；用户主动启用 AI 分类时才调用外部 API。
 """
 
 import csv
+from collections import Counter, defaultdict
 import hashlib
 import io
 import json
 import logging
+import math
 import os
 import re
 import sqlite3
@@ -24,6 +26,11 @@ from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Flask, jsonify, render_template, request, send_file
+
+from ai_category import (
+    delete_provider_key, public_settings, read_settings, record_test_result,
+    request_suggestions, reveal_tested_key, test_connection, write_settings,
+)
 
 
 APP_NAME = "个人账单分析工具"
@@ -53,6 +60,7 @@ def get_resource_path(rel: str) -> str:
 
 
 DB_PATH = os.path.join(get_db_dir(), "bill_data.db")
+AI_SETTINGS_PATH = os.path.join(get_db_dir(), "ai_settings.json")
 
 
 def create_app() -> Flask:
@@ -394,7 +402,7 @@ def month_add(month: str, delta: int) -> str:
 def month_list_from_db(conn: sqlite3.Connection) -> List[str]:
     rows = conn.execute(
         "SELECT DISTINCT month FROM ("
-        "SELECT month FROM transactions WHERE month != '' AND is_deleted=0 "
+        "SELECT month FROM transactions WHERE month != '' AND is_deleted=0 AND is_duplicate=0 AND count_in_expense=1 "
         "UNION SELECT month FROM monthly_budgets) "
         "ORDER BY month DESC"
     ).fetchall()
@@ -503,6 +511,15 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS monthly_budgets (
                 month TEXT PRIMARY KEY,
                 amount_cents INTEGER NOT NULL CHECK(amount_cents > 0)
+            );
+
+            CREATE TABLE IF NOT EXISTS ai_category_suggestions (
+                tx_id INTEGER PRIMARY KEY,
+                category TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                reason TEXT NOT NULL DEFAULT '',
+                provider TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE UNIQUE INDEX IF NOT EXISTS idx_merchant_rule_items_unique
@@ -1018,8 +1035,100 @@ def is_valid_growth_category(conn: sqlite3.Connection, category: str) -> bool:
     return category in get_custom_categories(conn, "成长")
 
 
-def classify_transaction(rec: Dict[str, Any], rules: List[Dict[str, str]]) -> Tuple[str, str]:
+GENERIC_PAYEES = ("微信支付", "支付宝", "财付通", "淘宝", "天猫", "京东", "拼多多", "美团", "抖音", "云闪付", "银联", "收款码")
+
+
+def normalize_classification_text(value: Any) -> str:
+    text = str(value or "").casefold()
+    text = re.sub(r"\d{6,}", "", text)
+    return re.sub(r"[\W_]+", "", text, flags=re.UNICODE)
+
+
+def load_category_memory(conn: sqlite3.Connection) -> Dict[str, Dict[Any, Counter]]:
+    """Only human-approved classifications become personal training examples."""
+    exact: Dict[Any, Counter] = defaultdict(Counter)
+    payee: Dict[Any, Counter] = defaultdict(Counter)
+    rows = conn.execute(
+        """SELECT counterparty, description, note, direction, category
+           FROM transactions
+           WHERE category_source='人工' AND category!='其他'
+             AND is_deleted=0 AND is_duplicate=0 AND count_in_expense=1"""
+    ).fetchall()
+    for row in rows:
+        merchant = normalize_classification_text(row["counterparty"])
+        detail = normalize_classification_text(row["description"] or row["note"])
+        if not merchant:
+            continue
+        key = (row["direction"], merchant)
+        payee[key][row["category"]] += 1
+        if detail:
+            exact[(row["direction"], merchant, detail)][row["category"]] += 1
+    return {"exact": exact, "payee": payee}
+
+
+def confident_category(counts: Counter, minimum: int = 1) -> Optional[str]:
+    if not counts:
+        return None
+    category, count = counts.most_common(1)[0]
+    return category if count >= minimum and count == sum(counts.values()) else None
+
+
+def remember_merchant_category(
+    conn: sqlite3.Connection, row: sqlite3.Row, category: str
+) -> int:
+    """Learn a broad merchant rule when safe; keep mixed-use payees specific."""
+    cpty = (row["counterparty"] or "").strip()
+    if not cpty:
+        return 0
+    generic = any(name in cpty for name in GENERIC_PAYEES)
+    previous = conn.execute(
+        """SELECT DISTINCT category FROM transactions
+           WHERE counterparty=? AND category_source='人工' AND id!=?
+             AND is_deleted=0 AND is_duplicate=0 AND category!='其他'""",
+        (cpty, row["id"]),
+    ).fetchall()
+    mixed = any(item["category"] != category for item in previous)
+    if generic or mixed:
+        if mixed:
+            conn.execute(
+                "DELETE FROM merchant_rule_items WHERE counterparty=? AND match_text=''",
+                (cpty,),
+            )
+        text = (row["description"] or "").strip() or (row["note"] or "").strip()
+        text = re.split(r"\d{6,}", text, maxsplit=1)[0].strip()[:40]
+        if text:
+            conn.execute(
+                """INSERT INTO merchant_rule_items (counterparty, match_text, category)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(counterparty, match_text)
+                   DO UPDATE SET category=excluded.category""",
+                (cpty, text, category),
+            )
+        return 0
+
+    conn.execute(
+        """INSERT INTO merchant_rule_items (counterparty, match_text, category)
+           VALUES (?, '', ?)
+           ON CONFLICT(counterparty, match_text)
+           DO UPDATE SET category=excluded.category""",
+        (cpty, category),
+    )
+    updated = conn.execute(
+        """UPDATE transactions SET category=?, category_source='记忆'
+           WHERE counterparty=? AND direction=? AND category='其他'
+             AND is_deleted=0 AND is_duplicate=0 AND count_in_expense=1 AND id!=?""",
+        (category, cpty, row["direction"], row["id"]),
+    ).rowcount
+    return updated
+
+
+def classify_transaction(
+    rec: Dict[str, Any], rules: List[Dict[str, str]],
+    memory: Optional[Dict[str, Dict[Any, Counter]]] = None,
+) -> Tuple[str, str]:
     cpty = (rec.get("counterparty") or "").strip()
+    detail = normalize_classification_text(rec.get("description") or rec.get("note"))
+    direction = rec.get("direction") or ""
     if cpty:
         search_text = " ".join([rec.get("note") or "", rec.get("description") or ""]).lower()
         specific = []
@@ -1033,9 +1142,19 @@ def classify_transaction(rec: Dict[str, Any], rules: List[Dict[str, str]]) -> Tu
             elif not mt:
                 general.append(rule)
         if specific:
-            return specific[0]["category"], "人工"
+            return specific[0]["category"], "记忆"
+        if memory and detail:
+            exact = memory["exact"].get((direction, normalize_classification_text(cpty), detail))
+            category = confident_category(exact)
+            if category:
+                return category, "记忆"
         if general:
-            return general[0]["category"], "人工"
+            return general[0]["category"], "记忆"
+        if memory:
+            counts = memory["payee"].get((direction, normalize_classification_text(cpty)))
+            category = confident_category(counts, minimum=2)
+            if category and not any(name in cpty for name in GENERIC_PAYEES):
+                return category, "记忆"
 
     fields = [
         (rec.get("note") or ""),
@@ -1070,8 +1189,11 @@ def apply_huabei_rule(rec: Dict[str, Any]) -> bool:
     return False
 
 
-def finalize_record(rec: Dict[str, Any], rules: Dict[str, str]) -> Dict[str, Any]:
-    rec["category"], rec["category_source"] = classify_transaction(rec, rules)
+def finalize_record(
+    rec: Dict[str, Any], rules: List[Dict[str, str]],
+    memory: Optional[Dict[str, Dict[Any, Counter]]] = None,
+) -> Dict[str, Any]:
+    rec["category"], rec["category_source"] = classify_transaction(rec, rules, memory)
     if not apply_huabei_rule(rec):
         rec["count_in_expense"] = 1
         rec["exclude_reason"] = ""
@@ -1299,12 +1421,13 @@ def import_file_object(
     conn = get_db()
     try:
         rules = load_merchant_rules(conn)
+        memory = load_category_memory(conn)
         inserted = 0
         skipped = 0
         for rec in parsed["transactions"]:
             if branch:
                 rec["branch"] = branch
-            rec = finalize_record(rec, rules)
+            rec = finalize_record(rec, rules, memory)
             if insert_record(conn, rec):
                 inserted += 1
             else:
@@ -1321,6 +1444,8 @@ def import_file_object(
 
 
 def transaction_query(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    # Ordinary bill views and exports contain recorded transactions only.
+    # The separate "不记录" page explicitly requests count_in_expense=0.
     clauses = ["is_deleted=0"]
     params: List[Any] = []
     if filters.get("month"):
@@ -1340,9 +1465,9 @@ def transaction_query(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
         else:
             clauses.append("branch=?")
             params.append(filters["branch"])
-    if filters.get("count_in_expense") in ("0", "1"):
-        clauses.append("count_in_expense=?")
-        params.append(int(filters["count_in_expense"]))
+    count_filter = filters.get("count_in_expense")
+    clauses.append("count_in_expense=?")
+    params.append(0 if count_filter == "0" else 1)
     if filters.get("keyword"):
         kw = f"%{filters['keyword']}%"
         clauses.append(
@@ -1493,7 +1618,7 @@ def pending_payload() -> Dict[str, Any]:
         for r in rows:
             a = conn.execute("SELECT * FROM transactions WHERE id=?", (r["a_id"],)).fetchone()
             b = conn.execute("SELECT * FROM transactions WHERE id=?", (r["b_id"],)).fetchone()
-            if a and b:
+            if a and b and a["count_in_expense"] and b["count_in_expense"]:
                 candidates.append(
                     {
                         "id": r["id"],
@@ -1861,6 +1986,8 @@ def api_create_ledger():
     name = (data.get("name") or "").strip()
     if not name:
         return api_error("账本名称不能为空")
+    if name in {"生活", "__summary__", "__new__"}:
+        return api_error("该名称已被总账本或系统选项使用")
     include = 1 if data.get("include_in_summary") else 0
     conn = get_db()
     try:
@@ -2100,32 +2227,10 @@ def api_set_category(tx_id: int):
             "UPDATE transactions SET category=?, category_source='人工' WHERE id=?",
             (category, tx_id),
         )
-        cpty = (row["counterparty"] or "").strip()
-        if remember and cpty:
-            existing = conn.execute(
-                "SELECT * FROM merchant_rule_items WHERE counterparty=?",
-                (cpty,),
-            ).fetchall()
-            same_general = any(
-                r["category"] == category and not (r["match_text"] or "").strip()
-                for r in existing
-            )
-            if not same_general:
-                # 若同一商户已经有不同分类，则用“说明/备注”生成更细的规则，
-                # 避免覆盖该商户原来的分类。
-                text = (row["description"] or "").strip() or (row["note"] or "").strip()
-                match_text = text[:40] if text else ""
-                conn.execute(
-                    """
-                    INSERT INTO merchant_rule_items (counterparty, match_text, category)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT(counterparty, match_text)
-                    DO UPDATE SET category=excluded.category
-                    """,
-                    (cpty, match_text, category),
-                )
+        conn.execute("DELETE FROM ai_category_suggestions WHERE tx_id=?", (tx_id,))
+        learned = remember_merchant_category(conn, row, category) if remember else 0
         conn.commit()
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "learned": learned})
     finally:
         conn.close()
 
@@ -2144,6 +2249,8 @@ def api_toggle_count(tx_id: int):
             "UPDATE transactions SET count_in_expense=?, exclude_reason=? WHERE id=?",
             (count, reason, tx_id),
         )
+        if not count:
+            conn.execute("DELETE FROM ai_category_suggestions WHERE tx_id=?", (tx_id,))
         conn.commit()
         return jsonify({"ok": True})
     finally:
@@ -2249,6 +2356,7 @@ def api_classify_merchant():
             """
             UPDATE transactions SET category=?, category_source='人工'
             WHERE counterparty=? AND is_deleted=0 AND is_duplicate=0 AND category='其他'
+              AND count_in_expense=1
             """,
             (category, counterparty),
         )
@@ -2272,24 +2380,245 @@ def api_auto_classify():
     conn = get_db()
     try:
         rules = load_merchant_rules(conn)
+        memory = load_category_memory(conn)
         rows = conn.execute(
             """
             SELECT * FROM transactions
             WHERE is_deleted=0 AND is_duplicate=0 AND category='其他'
+              AND count_in_expense=1
             """
         ).fetchall()
         changed = 0
         for row in rows:
             rec = row_to_dict(row)
-            category, category_source = classify_transaction(rec, rules)
+            category, category_source = classify_transaction(rec, rules, memory)
             if category != "其他":
                 conn.execute(
-                    "UPDATE transactions SET category=?, category_source='自动' WHERE id=?",
-                    (category, row["id"]),
+                    "UPDATE transactions SET category=?, category_source=? WHERE id=?",
+                    (category, category_source, row["id"]),
                 )
                 changed += 1
         conn.commit()
         return jsonify({"changed": changed})
+    finally:
+        conn.close()
+
+
+@app.get("/api/ai-category/settings")
+def api_ai_category_settings():
+    try:
+        return jsonify(public_settings(AI_SETTINGS_PATH))
+    except (OSError, ValueError) as exc:
+        return api_error(f"读取 AI 设置失败：{exc}")
+
+
+@app.put("/api/ai-category/settings")
+def api_save_ai_category_settings():
+    data = request.get_json(silent=True) or {}
+    try:
+        write_settings(
+            AI_SETTINGS_PATH, str(data.get("provider") or ""),
+            str(data.get("model") or ""), str(data.get("key") or "").strip(),
+        )
+        return jsonify(public_settings(AI_SETTINGS_PATH))
+    except (OSError, ValueError, RuntimeError) as exc:
+        return api_error(str(exc))
+
+
+@app.delete("/api/ai-category/settings/<provider>/key")
+def api_delete_ai_category_key(provider: str):
+    try:
+        delete_provider_key(AI_SETTINGS_PATH, provider)
+        return jsonify(public_settings(AI_SETTINGS_PATH))
+    except (OSError, ValueError) as exc:
+        return api_error(str(exc))
+
+
+@app.post("/api/ai-category/settings/test")
+def api_test_ai_category_settings():
+    data = request.get_json(silent=True) or {}
+    try:
+        settings = read_settings(AI_SETTINGS_PATH, str(data.get("provider") or ""))
+    except (OSError, ValueError, RuntimeError) as exc:
+        return api_error(str(exc))
+    try:
+        test_connection(settings)
+    except (OSError, ValueError, RuntimeError) as exc:
+        if settings.get("key"):
+            try:
+                record_test_result(AI_SETTINGS_PATH, settings, False)
+            except (OSError, ValueError, RuntimeError):
+                pass
+        return api_error(str(exc))
+    try:
+        last_test = record_test_result(AI_SETTINGS_PATH, settings, True)
+    except (OSError, ValueError, RuntimeError) as exc:
+        return api_error(str(exc))
+    return jsonify({"ok": True, "provider": settings["provider"],
+                    "model": settings["model"], "last_test": last_test})
+
+
+@app.post("/api/ai-category/settings/<provider>/reveal")
+def api_reveal_ai_category_key(provider: str):
+    try:
+        response = jsonify({"key": reveal_tested_key(AI_SETTINGS_PATH, provider)})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except (OSError, ValueError, RuntimeError) as exc:
+        return api_error(str(exc))
+
+
+@app.get("/api/ai-category/suggestions")
+def api_ai_category_suggestions():
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT s.tx_id, s.category, s.confidence, s.reason, s.provider,
+                      t.counterparty, t.description, t.amount, t.direction
+               FROM ai_category_suggestions s
+               JOIN transactions t ON t.id=s.tx_id
+               WHERE t.is_deleted=0 AND t.is_duplicate=0 AND t.category='其他'
+                 AND t.count_in_expense=1
+               ORDER BY s.confidence DESC, s.created_at DESC"""
+        ).fetchall()
+        return jsonify({"items": [dict(row) for row in rows]})
+    finally:
+        conn.close()
+
+
+@app.post("/api/ai-category/suggest")
+def api_ai_category_suggest():
+    data = request.get_json(silent=True) or {}
+    try:
+        limit = int(data.get("limit", 25))
+    except (TypeError, ValueError):
+        return api_error("批量条数无效")
+    if not 1 <= limit <= 40:
+        return api_error("每次最多分析 40 笔")
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT id, counterparty, description, note, amount, direction
+               FROM transactions
+               WHERE is_deleted=0 AND is_duplicate=0 AND category='其他'
+                 AND count_in_expense=1
+                 AND direction='支出'
+                 AND id NOT IN (SELECT tx_id FROM ai_category_suggestions)
+               ORDER BY ts DESC, id DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        examples = conn.execute(
+            """SELECT counterparty, description, category
+               FROM transactions
+               WHERE category_source='人工' AND category!='其他'
+                 AND is_deleted=0 AND is_duplicate=0 AND count_in_expense=1
+               ORDER BY id DESC LIMIT 24"""
+        ).fetchall()
+        categories = CATEGORIES + get_custom_categories(conn)
+        items = [dict(row) for row in rows]
+        personal_examples = [dict(row) for row in examples]
+    finally:
+        conn.close()
+    if not items:
+        return jsonify({"created": 0, "message": "暂无需要 AI 建议的支出"})
+    try:
+        settings = read_settings(AI_SETTINGS_PATH)
+        proposed = request_suggestions(settings, categories, items, personal_examples)
+    except (OSError, ValueError, RuntimeError) as exc:
+        return api_error(str(exc))
+
+    valid_ids = {item["id"] for item in items}
+    accepted: Dict[int, Tuple[str, float, str]] = {}
+    for entry in proposed:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            tx_id = int(entry.get("id"))
+            confidence = float(entry.get("confidence"))
+        except (TypeError, ValueError):
+            continue
+        category = entry.get("category")
+        if (tx_id not in valid_ids or category not in categories or category == "其他"
+                or not math.isfinite(confidence) or not 0 <= confidence <= 1):
+            continue
+        accepted[tx_id] = (category, confidence, str(entry.get("reason") or "")[:100])
+    conn = get_db()
+    try:
+        for tx_id, (category, confidence, reason) in accepted.items():
+            conn.execute(
+                """INSERT OR IGNORE INTO ai_category_suggestions
+                   (tx_id, category, confidence, reason, provider)
+                   SELECT id, ?, ?, ?, ? FROM transactions
+                   WHERE id=? AND category='其他' AND is_deleted=0 AND is_duplicate=0
+                     AND count_in_expense=1""",
+                (category, confidence, reason, settings["provider"], tx_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"created": len(accepted), "requested": len(items)})
+
+
+@app.post("/api/ai-category/suggestions/<int:tx_id>/accept")
+def api_ai_category_accept(tx_id: int):
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """SELECT t.*, s.category AS suggested_category
+               FROM transactions t JOIN ai_category_suggestions s ON s.tx_id=t.id
+               WHERE t.id=? AND t.category='其他' AND t.is_deleted=0 AND t.is_duplicate=0
+                 AND t.count_in_expense=1""",
+            (tx_id,),
+        ).fetchone()
+        if not row:
+            return api_error("建议已失效", 404)
+        if not is_valid_category(conn, row["suggested_category"]):
+            return api_error("建议的分类已不存在")
+        conn.execute(
+            "UPDATE transactions SET category=?, category_source='人工' WHERE id=?",
+            (row["suggested_category"], tx_id),
+        )
+        learned = remember_merchant_category(conn, row, row["suggested_category"])
+        conn.execute("DELETE FROM ai_category_suggestions WHERE tx_id=?", (tx_id,))
+        conn.commit()
+        return jsonify({"ok": True, "learned": learned})
+    finally:
+        conn.close()
+
+
+@app.post("/api/ai-category/accept-high")
+def api_ai_category_accept_high():
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT s.tx_id, s.category FROM ai_category_suggestions s
+               JOIN transactions t ON t.id=s.tx_id
+               WHERE s.confidence>=0.85 AND t.category='其他'
+                 AND t.is_deleted=0 AND t.is_duplicate=0 AND t.count_in_expense=1"""
+        ).fetchall()
+        valid = [(row["category"], row["tx_id"]) for row in rows
+                 if is_valid_category(conn, row["category"])]
+        conn.executemany(
+            "UPDATE transactions SET category=?, category_source='AI确认' WHERE id=?",
+            valid,
+        )
+        conn.executemany(
+            "DELETE FROM ai_category_suggestions WHERE tx_id=?",
+            [(tx_id,) for _, tx_id in valid],
+        )
+        conn.commit()
+        return jsonify({"accepted": len(valid)})
+    finally:
+        conn.close()
+
+
+@app.delete("/api/ai-category/suggestions/<int:tx_id>")
+def api_ai_category_reject(tx_id: int):
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM ai_category_suggestions WHERE tx_id=?", (tx_id,))
+        conn.commit()
+        return jsonify({"ok": True})
     finally:
         conn.close()
 

@@ -333,6 +333,11 @@
     .mapping-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; margin-bottom: 14px; }
     .mapping-field select { width: 100%; min-width: 0; }
     .mapping-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .ai-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .ai-suggestion { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 13px 0; border-top: 1px solid var(--line); }
+    .ai-suggestion:first-child { margin-top: 14px; }
+    .ai-suggestion-title { font-weight: 700; }
+    .ai-suggestion-reason { font-size: 12px; color: var(--muted); }
     .hidden { display: none; }
       .flash {
       position: fixed;
@@ -453,6 +458,43 @@
     .modal-close:hover { background: #e4e4e7; color: #18181b; transform: none; }
     .modal.hidden { display: none; }
     #confirm-modal { z-index: 120; }
+    #drill-modal .drill-modal-box {
+      width: min(1120px, calc(100vw - 40px));
+      max-height: calc(100vh - 40px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #drill-modal .drill-modal-box > .row:first-child { position: static; flex: 0 0 auto; }
+    #drill-modal .drill-table-wrap { flex: 1 1 auto; min-height: 0; max-height: none; overflow: auto; }
+    #drill-modal .drill-table { min-width: 1050px; table-layout: fixed; }
+    #drill-modal .drill-table thead th { position: static; }
+    #drill-modal .drill-table td:nth-child(3),
+    #drill-modal .drill-table td:nth-child(4) { overflow-wrap: anywhere; }
+    #drill-modal .drill-table td:last-child { white-space: normal; }
+    #drill-modal .drill-table select { width: 100%; min-width: 0; }
+    #drill-modal .drill-table td:last-child button { margin-top: 6px; }
+    .api-manager-box { width: min(720px, 100%); }
+    .api-provider-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }
+    .api-provider-card { text-align: left; padding: 14px 16px; border: 1px solid var(--line); background: #fff; border-radius: 10px; }
+    .api-provider-card.active { border-color: var(--brand); background: var(--brand-soft); }
+    .api-provider-card strong { display: block; color: var(--text); font-size: 14px; margin-bottom: 4px; }
+    .api-provider-card span { color: var(--muted); font-size: 12px; }
+    .api-manager-form { display: grid; grid-template-columns: 1fr; gap: 15px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; }
+    .api-manager-form label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 12px; }
+    .api-manager-form input { width: 100%; }
+    .api-key-row { display: flex; gap: 8px; }
+    .api-key-row input { min-width: 0; flex: 1; }
+    .api-saved-key { margin-top: 14px; padding: 14px 18px; border: 1px solid var(--line); border-radius: 10px; background: #fafbff; }
+    .api-saved-key.hidden, .api-revealed-row.hidden { display: none; }
+    .api-saved-key-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .api-saved-key code { display: inline-block; margin-left: 10px; color: #334155; letter-spacing: .08em; }
+    .api-revealed-row { margin-top: 10px; }
+    .api-connection-result { margin-top: 10px; font-size: 12px; color: var(--muted); }
+    .api-connection-result.success { color: #15803d; }
+    .api-connection-result.failure { color: #b91c1c; }
+    .api-manager-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    .api-manager-footer .row { flex-wrap: wrap; }
     .field-label { font-size: 13px; color: var(--muted); margin: 4px 0; }
     .tx-detail-grid { display: grid; grid-template-columns: 86px 1fr; gap: 4px 10px; font-size: 13px; }
     .tx-detail-grid .k { color: var(--muted); }
@@ -485,6 +527,9 @@
     .detail-table-panel td[data-col="counterparty"] { min-width: 100px; overflow-wrap: anywhere; }
     .detail-table-panel th[data-col="description"], .detail-table-panel td[data-col="description"] { min-width: 145px; max-width: 220px; }
     .detail-table-panel td[data-col="count"] button { white-space: nowrap; }
+    .detail-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 130px; }
+    .detail-tags .tag { margin: 0; max-width: 160px; overflow-wrap: anywhere; }
+    .detail-ledger-select { min-width: 125px; max-width: 170px; }
     .detail-table-panel #detail-empty { padding: 45px 20px; }
     .summary-toolbar { display: flex; align-items: center; gap: 10px; padding: 13px 16px; }
     .summary-toolbar .toolbar-spacer { flex: 1; }
@@ -525,6 +570,7 @@
       .detail-filter-primary input { grid-column: 1 / -1; }
     }
     @media (max-width: 760px) {
+      .ai-suggestion, .api-provider-list { grid-template-columns: 1fr; }
       .app-shell { display: block; }
       .sidebar { position: static; width: 100%; padding: 12px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
       .sidebar .brand { padding: 0 0 10px; }
@@ -577,6 +623,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
           账单明细
         </button>
+        <button data-page="excluded">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v6m4-6v6"/></svg>
+          不记录
+        </button>
         <button data-page="pending">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
           待确认
@@ -594,8 +644,12 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
           导入账单
         </button>
+        <button id="btn-sidebar-api-manager" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 10V7a4 4 0 0 1 8 0v3M5 10h14v10H5z"/><circle cx="12" cy="15" r="1"/></svg>
+          API 管理
+        </button>
       </nav>
-      <div class="side-foot"><span class="privacy-dot"></span>数据仅保存在本机<br>账单不会上传到云端</div>
+      <div class="side-foot"><span class="privacy-dot"></span>账本保存在本机<br>AI 建议按需发送必要字段</div>
     </aside>
 
     <main class="content">
@@ -605,7 +659,7 @@
         <h1 id="view-title">导入账单</h1>
         <p id="view-description">导入微信、支付宝或银行流水，开始整理你的收支。</p>
       </div>
-      <div class="local-status"><span class="privacy-dot"></span>仅本机保存</div>
+      <div class="local-status"><span class="privacy-dot"></span>账本本机保存</div>
     </header>
     <section id="page-import" class="page active">
       <div class="panel">
@@ -623,7 +677,7 @@
           <span class="small">支持多选 · CSV / XLSX / XLS</span>
         </div>
         <div class="import-footer">
-          <span class="small">重复导入时会自动跳过已有记录。所有账单只保存在这台电脑。</span>
+          <span class="small">重复导入会跳过已有记录。原始账单文件保存在本机；只有主动请求 AI 建议时才发送分类所需字段。</span>
           <button class="danger small" id="btn-reset-data">清空账单数据</button>
         </div>
       </div>
@@ -646,13 +700,24 @@
           <button id="btn-open-rules">商户记忆规则</button>
         </div>
       </div>
+      <div class="panel" id="ai-category-panel">
+        <h2>AI 分类建议</h2>
+        <p class="section-lead">先用你确认过的分类记忆处理；剩余“其他”可按批次请求 AI。只发送商户、说明、备注、金额、收支方向和少量已确认示例，不发送整份账单或账号。建议需由你采用后才写入账本。</p>
+        <div class="ai-actions">
+          <button id="btn-ai-manage" type="button">API 管理</button>
+          <button class="primary" id="btn-ai-suggest">为 25 笔未分类交易生成建议</button>
+          <button id="btn-ai-accept-high">采用 AI 自评 85% 以上</button>
+          <span id="ai-category-status" class="small"></span>
+        </div>
+        <div id="ai-category-suggestions"></div>
+      </div>
       <div id="pending-content"></div>
     </section>
 
     <section id="page-detail" class="page">
       <div class="panel">
         <h2>查找交易</h2>
-        <p class="section-lead">按时间、账本、来源和分类筛选，也可以搜索交易对方或备注。</p>
+        <p class="section-lead">按时间、账本、来源、分类或标签筛选；每笔交易可编辑标签并切换账本。</p>
         <div class="detail-filter-primary">
           <input type="text" id="filter-keyword" placeholder="搜索交易对方、说明或备注">
           <select id="filter-month"><option value="">全部月份</option></select>
@@ -676,19 +741,15 @@
             <option>购物</option>
             <option>其他</option>
           </select>
-          <select id="filter-count">
-            <option value="">是否计入：全部</option>
-            <option value="1">计入支出</option>
-            <option value="0">不计入支出</option>
-          </select>
+          <select id="filter-tag"><option value="">全部标签</option></select>
           <button id="btn-reset">重置</button>
         </div>
         <div class="detail-tools">
           <span class="detail-tools-label">明细工具</span>
           <button id="btn-choose-columns">选择列</button>
+          <button id="btn-detail-new-ledger">新建账本</button>
           <button id="btn-manual-merge" class="danger">合并选中（2 条）</button>
           <button id="btn-open-merges">合并对账</button>
-          <button id="btn-open-excluded">不计入账单</button>
         </div>
       </div>
       <div class="panel detail-table-panel">
@@ -702,9 +763,11 @@
                 <th data-col="counterparty">交易对方</th>
                 <th data-col="description">说明/摘要</th>
                 <th data-col="category">分类</th>
+                <th data-col="tags">标签</th>
+                <th data-col="branch">账本</th>
                 <th data-col="amount">金额</th>
                 <th data-col="direction">方向</th>
-                <th data-col="count">计入</th>
+                <th data-col="count">不记录</th>
                 <th data-col="payment_method">支付方式</th>
                 <th data-col="merge">合并</th>
                 <th data-col="actions">操作</th>
@@ -713,6 +776,31 @@
             <tbody id="detail-body"></tbody>
           </table>
           <div id="detail-empty" class="empty hidden">暂无记录</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-excluded" class="page">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between;align-items:center;">
+          <div>
+            <h2>不记录</h2>
+            <p class="section-lead">这里存放不计入账单的交易，包括手动移入和导入时自动排除的条目。需要时可以恢复到原账本。</p>
+          </div>
+          <span id="excluded-count" class="badge gray">0 笔</span>
+        </div>
+        <div class="row">
+          <input id="excluded-keyword" type="search" placeholder="搜索交易对方、说明或原因" style="min-width:260px;flex:1;">
+          <button id="btn-excluded-search">查找</button>
+        </div>
+      </div>
+      <div class="panel detail-table-panel">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>时间</th><th>来源</th><th>原账本</th><th>交易对方</th><th>说明</th><th>金额</th><th>原因</th><th>操作</th></tr></thead>
+            <tbody id="excluded-list"></tbody>
+          </table>
+          <div id="excluded-empty" class="empty hidden">这里还没有不记录的条目</div>
         </div>
       </div>
     </section>
@@ -801,6 +889,47 @@
   </main>
   </div>
 
+  <div id="api-manager-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="api-manager-title">
+    <div class="modal-box api-manager-box">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h2 id="api-manager-title" style="margin:0;">API 管理</h2>
+        <button id="btn-api-manager-close" class="modal-close" type="button" aria-label="关闭 API 管理窗口">×</button>
+      </div>
+      <p class="muted">分别保存 OpenAI 和 DeepSeek 的设置，选择当前用于账单分类的服务。保存后即可查看完整密钥；连接状态由测试结果单独显示。</p>
+      <div class="api-provider-list" id="api-provider-list">
+        <button type="button" class="api-provider-card" data-provider="openai"><strong>OpenAI</strong><span id="api-state-openai">未配置</span></button>
+        <button type="button" class="api-provider-card" data-provider="deepseek"><strong>DeepSeek</strong><span id="api-state-deepseek">未配置</span></button>
+      </div>
+      <div class="api-manager-form">
+        <label>模型名<input type="text" id="ai-model" placeholder="模型名" autocomplete="off"></label>
+        <label>API 密钥
+          <span class="api-key-row"><input type="password" id="ai-key" placeholder="输入或更新密钥" autocomplete="new-password"><button id="btn-ai-key-visibility" type="button">显示</button></span>
+        </label>
+        <div class="small" id="api-key-help">密钥使用 Windows 当前用户加密保存。</div>
+      </div>
+      <div id="api-saved-key-panel" class="api-saved-key hidden">
+        <div class="api-saved-key-head">
+          <div><strong>已保存的密钥</strong><code id="api-key-hint"></code></div>
+          <button id="btn-ai-reveal-key" type="button">查看完整密钥</button>
+        </div>
+        <div id="api-revealed-key-row" class="api-key-row api-revealed-row hidden">
+          <input id="api-revealed-key" type="text" readonly aria-label="完整 API 密钥">
+          <button id="btn-ai-hide-key" type="button">收起</button>
+        </div>
+        <div id="api-connection-result" class="api-connection-result" role="status">尚未测试连接</div>
+      </div>
+      <div class="api-manager-footer">
+        <div class="row">
+          <button id="btn-ai-save" class="primary" type="button">保存并设为当前服务</button>
+          <button id="btn-ai-test" type="button">测试连接</button>
+          <button id="btn-ai-delete-key" class="danger" type="button">删除密钥</button>
+        </div>
+        <span id="api-manager-status" class="small" role="status"></span>
+      </div>
+      <p class="small" style="margin:16px 0 0;">连接测试会向所选服务发送一句测试文字，可能产生少量 API 费用；不会发送账单。完整密钥会在 30 秒后自动收起，也可手动收起。删除只清除本机保存的密钥；如需让原密钥失效，还需到服务商控制台撤销。</p>
+    </div>
+  </div>
+
   <div id="category-modal" class="modal hidden">
     <div class="modal-box">
       <div class="row" style="justify-content:space-between; align-items:center;">
@@ -838,25 +967,15 @@
     </div>
   </div>
 
-  <div id="excluded-modal" class="modal hidden">
-    <div class="modal-box" style="width:760px;">
-      <div class="row" style="justify-content:space-between; align-items:center;">
-        <h2 style="margin:0;">不计入账单</h2>
-        <button id="btn-excluded-close" class="modal-close">×</button>
-      </div>
-      <p class="muted">这里集中存放你手动设为“不计入”的账单，不会进入消费汇总。可一键恢复计入。</p>
-      <div id="excluded-list"></div>
-    </div>
-  </div>
-
   <div id="drill-modal" class="modal hidden">
-    <div class="modal-box" style="width:820px;">
+    <div class="modal-box drill-modal-box">
       <div class="row" style="justify-content:space-between; align-items:center;">
         <h2 id="drill-title" style="margin:0;">分类明细</h2>
         <button id="btn-drill-close" class="modal-close">×</button>
       </div>
-      <div class="table-wrap" style="max-height:58vh; overflow:auto;">
-        <table>
+      <div class="table-wrap drill-table-wrap">
+        <table class="drill-table">
+          <colgroup><col style="width:145px"><col style="width:88px"><col style="width:155px"><col style="width:190px"><col style="width:105px"><col style="width:65px"><col style="width:120px"><col style="width:182px"></colgroup>
           <thead>
             <tr>
               <th>时间</th><th>来源</th><th>交易对方</th><th>说明/摘要</th>
@@ -926,6 +1045,39 @@
       <div id="column-options" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
       <div class="row" style="margin-top:14px; justify-content:flex-end;">
         <button class="primary" id="btn-column-confirm">应用</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="detail-tags-modal" class="modal hidden">
+    <div class="modal-box" style="width:520px;">
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">编辑交易标签</h2>
+        <button id="btn-detail-tags-close" class="modal-close">×</button>
+      </div>
+      <p class="muted">一笔交易可以有多个标签。勾选已有标签，或输入名称新建。</p>
+      <div id="detail-tags-options" class="row" style="margin:14px 0;max-height:240px;overflow:auto;"></div>
+      <div class="row">
+        <input id="detail-new-tag" type="text" maxlength="40" placeholder="新标签名称" style="flex:1;">
+        <button id="btn-detail-tag-create">新增并选中</button>
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:16px;">
+        <button class="primary" id="btn-detail-tags-save">保存标签</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="detail-ledger-modal" class="modal hidden">
+    <div class="modal-box" style="width:460px;">
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">新建账本</h2>
+        <button id="btn-detail-ledger-close" class="modal-close">×</button>
+      </div>
+      <p class="muted">新账本创建后，可在明细的“账本”列中选择。单独建账本默认不纳入总汇总。</p>
+      <input id="detail-new-ledger" type="text" maxlength="40" placeholder="账本名称" style="width:100%;">
+      <label class="tag-option" style="display:inline-flex;margin-top:12px;"><input id="detail-ledger-include-summary" type="checkbox"> 纳入总汇总</label>
+      <div class="row" style="justify-content:flex-end;margin-top:16px;">
+        <button class="primary" id="btn-detail-ledger-create">创建账本</button>
       </div>
     </div>
   </div>
@@ -1073,23 +1225,25 @@
     const pageMeta = {
       import: ["导入账单", "导入支付平台、银行或其他表格，开始整理你的收支。"],
       pending: ["待确认", "核对疑似重复记录，完善未分类的交易。"],
-      detail: ["账单明细", "按月份、来源、账本和分类查找每一笔交易。"],
+      detail: ["账单明细", "按月份、来源、账本、分类和标签查找每一笔交易。"],
+      excluded: ["不记录", "暂不纳入账单的交易集中放在这里，可随时恢复。"],
       summary: ["月度概览", "查看本月收支、预算与消费结构。"],
       income: ["独立账本", "单独管理特定用途的收入与支出。"],
     };
     function switchPage(page) {
       $$(".page").forEach((p) => p.classList.remove("active"));
       $("#page-" + page).classList.add("active");
-      $$("nav button").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
+      $$("nav button[data-page]").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
       const meta = pageMeta[page] || pageMeta.import;
       $("#view-title").textContent = meta[0];
       $("#view-description").textContent = meta[1];
       if (page === "pending") loadPending();
       if (page === "detail") loadDetail();
+      if (page === "excluded") loadExcluded();
       if (page === "summary") loadSummary();
       if (page === "income") loadLedgers();
     }
-    $$("nav button").forEach((b) => b.addEventListener("click", () => switchPage(b.dataset.page)));
+    $$("nav button[data-page]").forEach((b) => b.addEventListener("click", () => switchPage(b.dataset.page)));
     document.querySelector(".sidebar").addEventListener("mousedown", (e) => {
       if (e.target.closest("button, summary, input, select, a")) return;
       if (window.pywebview && window.pywebview.api && window.pywebview.api.start_drag) {
@@ -1210,7 +1364,7 @@
                 <option value="生活" ${t.branch === "生活" ? "selected" : ""}>总账本</option>
                 ${ledgerOptions(t.branch)}
               </select>
-              <button class="small ${t.count_in_expense ? "danger" : ""}" onclick="toggleLedgerDrillCount(${t.id}, ${t.count_in_expense ? 0 : 1})">${t.count_in_expense ? "不计入" : "计入"}</button>
+              <button class="small danger" onclick="toggleLedgerDrillCount(${t.id}, 0)">移至不记录</button>
             </td>
           </tr>`).join("") || '<tr><td colspan="8" class="empty">该分类没有记录</td></tr>';
         $("#drill-modal").classList.remove("hidden");
@@ -1360,7 +1514,10 @@
       loadLedgerStats();
     }
     function ledgerOptions(currentBranch) {
-      return allLedgers.filter((l) => !l.deleted).map((l) =>
+      const active = allLedgers.filter((l) => !l.deleted);
+      const missing = currentBranch && currentBranch !== "生活" && !active.some((l) => l.name === currentBranch)
+        ? `<option value="${esc(currentBranch)}" selected>${esc(currentBranch)}（已删除）</option>` : "";
+      return missing + active.map((l) =>
         `<option value="${esc(l.name)}" ${currentBranch === l.name ? "selected" : ""}>${esc(l.name)}</option>`
       ).join("");
     }
@@ -1368,11 +1525,12 @@
       try {
         await api(`/api/transactions/${id}/branch`, { method: "POST", body: { branch } });
         showFlash(branch === "生活" ? "已移回总账本" : `已移到${branch}`);
+        if ($("#page-detail").classList.contains("active")) $("#filter-branch").value = branch;
         loadDetail();
         loadLedgers();
         loadSummary();
         if (currentLedger) loadLedgerStats();
-      } catch (err) { showFlash(err.message, true); }
+      } catch (err) { showFlash(err.message, true); loadDetail(); }
     }
     function moveBranchPrompt(id, currentBranch) {
       const target = currentBranch === "生活"
@@ -1537,10 +1695,238 @@
         renderPending();
         await loadRules();
         await loadCategories();
+        await loadAiSettings();
+        await loadAiSuggestions();
       } catch (err) {
         showFlash(err.message, true);
       }
     }
+
+    let aiSettings = null;
+    let aiEditorProvider = "openai";
+    let aiManagerReturnFocus = null;
+    let revealedKeyTimer = null;
+    function hideRevealedKey() {
+      clearTimeout(revealedKeyTimer);
+      revealedKeyTimer = null;
+      $("#api-revealed-key").value = "";
+      $("#api-revealed-key-row").classList.add("hidden");
+    }
+    function testTimeLabel(lastTest) {
+      if (!lastTest?.tested_at) return "";
+      const date = new Date(lastTest.tested_at);
+      return Number.isNaN(date.getTime()) ? "" : ` · ${date.toLocaleString("zh-CN")}`;
+    }
+    async function loadAiSettings() {
+      aiSettings = await api("/api/ai-category/settings");
+      const selected = aiSettings.selected;
+      const saved = aiSettings.providers?.[selected];
+      $("#ai-category-status").textContent = saved?.has_key
+        ? `${selected === "openai" ? "OpenAI" : "DeepSeek"} · ${saved.key_hint} · ${saved.last_test?.status === "success" ? "上次测试成功" : saved.last_test?.status === "failure" ? "上次测试失败" : "尚未测试"}`
+        : "尚未配置当前 AI 服务，请打开 API 管理";
+    }
+    function renderAiManager() {
+      hideRevealedKey();
+      for (const provider of ["openai", "deepseek"]) {
+        const saved = aiSettings?.providers?.[provider];
+        const button = $(`#api-provider-list [data-provider="${provider}"]`);
+        button.classList.toggle("active", provider === aiEditorProvider);
+        button.setAttribute("aria-pressed", String(provider === aiEditorProvider));
+        $(`#api-state-${provider}`).textContent =
+          `${provider === aiSettings?.selected ? "当前使用 · " : ""}${saved?.has_key ? `${saved.key_hint} · ${saved.last_test?.status === "success" ? "测试成功" : saved.last_test?.status === "failure" ? "测试失败" : "未测试"}` : "未配置密钥"}`;
+      }
+      const saved = aiSettings?.providers?.[aiEditorProvider];
+      $("#ai-model").value = saved?.model || "";
+      $("#ai-key").value = "";
+      $("#ai-key").type = "password";
+      $("#btn-ai-key-visibility").textContent = "显示";
+      $("#ai-key").placeholder = saved?.has_key ? "已安全保存；留空则保留" : "输入 API 密钥";
+      $("#api-key-help").textContent = saved?.has_key
+        ? "已有密钥已加密保存。输入新密钥可替换，留空会保留原密钥。"
+        : "尚未保存密钥。密钥将使用 Windows 当前用户加密保存。";
+      $("#api-saved-key-panel").classList.toggle("hidden", !saved?.has_key);
+      $("#api-key-hint").textContent = saved?.key_hint || "";
+      const lastTest = saved?.last_test;
+      const result = $("#api-connection-result");
+      result.className = "api-connection-result";
+      if (lastTest?.status === "success") {
+        result.classList.add("success");
+        result.textContent = `上次连接测试成功${testTimeLabel(lastTest)} · ${saved.model}`;
+      } else if (lastTest?.status === "failure") {
+        result.classList.add("failure");
+        result.textContent = `上次连接测试失败${testTimeLabel(lastTest)} · 请检查密钥、模型或额度`;
+      } else {
+        result.textContent = "尚未测试连接；已保存不代表可用。";
+      }
+      $("#btn-ai-test").disabled = !saved?.has_key;
+      $("#btn-ai-delete-key").disabled = !saved?.has_key;
+      $("#btn-ai-reveal-key").disabled = !saved?.has_key;
+      $("#btn-ai-reveal-key").title = saved?.has_key ? "" : "请先保存密钥";
+      $("#api-manager-status").textContent = "";
+    }
+    async function openAiManager() {
+      aiManagerReturnFocus = document.activeElement;
+      try {
+        await loadAiSettings();
+        aiEditorProvider = aiSettings.selected;
+        renderAiManager();
+        $("#api-manager-modal").classList.remove("hidden");
+        $("#btn-api-manager-close").focus();
+      } catch (err) { showFlash(err.message, true); }
+    }
+    function closeAiManager() {
+      $("#api-manager-modal").classList.add("hidden");
+      hideRevealedKey();
+      $("#ai-key").value = "";
+      $("#ai-key").type = "password";
+      if (aiManagerReturnFocus?.isConnected) aiManagerReturnFocus.focus();
+    }
+    $("#btn-ai-manage").addEventListener("click", openAiManager);
+    $("#btn-sidebar-api-manager").addEventListener("click", openAiManager);
+    $("#btn-api-manager-close").addEventListener("click", closeAiManager);
+    $("#api-manager-modal").addEventListener("click", (event) => {
+      if (event.target === $("#api-manager-modal")) closeAiManager();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !$("#api-manager-modal").classList.contains("hidden")) closeAiManager();
+    });
+    $("#api-provider-list").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-provider]");
+      if (!button) return;
+      aiEditorProvider = button.dataset.provider;
+      renderAiManager();
+    });
+    $("#btn-ai-key-visibility").addEventListener("click", () => {
+      const input = $("#ai-key");
+      input.type = input.type === "password" ? "text" : "password";
+      $("#btn-ai-key-visibility").textContent = input.type === "password" ? "显示" : "隐藏";
+    });
+    async function revealAiKey(provider) {
+      const button = $("#btn-ai-reveal-key");
+      button.disabled = true;
+      try {
+        const data = await api(`/api/ai-category/settings/${provider}/reveal`, { method: "POST" });
+        if (provider !== aiEditorProvider || $("#api-manager-modal").classList.contains("hidden")) return;
+        $("#api-revealed-key").value = data.key;
+        $("#api-revealed-key-row").classList.remove("hidden");
+        clearTimeout(revealedKeyTimer);
+        revealedKeyTimer = setTimeout(hideRevealedKey, 30000);
+      } catch (err) { $("#api-manager-status").textContent = `查看密钥失败：${err.message}`; }
+      finally { button.disabled = !aiSettings?.providers?.[aiEditorProvider]?.has_key; }
+    }
+    $("#btn-ai-reveal-key").addEventListener("click", () => revealAiKey(aiEditorProvider));
+    $("#btn-ai-hide-key").addEventListener("click", hideRevealedKey);
+    for (const selector of ["#ai-model", "#ai-key"]) {
+      $(selector).addEventListener("input", () => {
+        $("#api-manager-status").textContent = "修改尚未保存";
+      });
+    }
+    $("#btn-ai-save").addEventListener("click", async () => {
+      const button = $("#btn-ai-save");
+      button.disabled = true;
+      try {
+        aiSettings = await api("/api/ai-category/settings", { method: "PUT", body: {
+          provider: aiEditorProvider,
+          model: $("#ai-model").value.trim(),
+          key: $("#ai-key").value.trim()
+        }});
+        renderAiManager();
+        await loadAiSettings();
+        $("#api-manager-status").textContent = "已保存并设为当前服务";
+      } catch (err) { $("#api-manager-status").textContent = err.message; }
+      finally { button.disabled = false; }
+    });
+    $("#btn-ai-test").addEventListener("click", async () => {
+      const saved = aiSettings?.providers?.[aiEditorProvider];
+      if ($("#ai-key").value || $("#ai-model").value.trim() !== saved?.model) {
+        $("#api-manager-status").textContent = "请先保存修改，再测试连接";
+        return;
+      }
+      const button = $("#btn-ai-test");
+      const provider = aiEditorProvider;
+      button.disabled = true;
+      $("#api-manager-status").textContent = "正在连接…";
+      try {
+        await api("/api/ai-category/settings/test", { method: "POST", body: { provider } });
+        await loadAiSettings();
+        if (provider === aiEditorProvider) {
+          renderAiManager();
+          $("#api-manager-status").textContent = "连接成功；已显示本次使用的密钥";
+          await revealAiKey(provider);
+        }
+      } catch (err) {
+        await loadAiSettings();
+        if (provider === aiEditorProvider) {
+          renderAiManager();
+          $("#api-manager-status").textContent = err.message;
+        }
+      }
+      finally { button.disabled = !aiSettings?.providers?.[aiEditorProvider]?.has_key; }
+    });
+    $("#btn-ai-delete-key").addEventListener("click", async () => {
+      const name = aiEditorProvider === "openai" ? "OpenAI" : "DeepSeek";
+      if (!await askConfirm(`从本机删除 ${name} API 密钥？服务商端的密钥仍需在其控制台撤销。`, { confirmText: "删除本机密钥" })) return;
+      try {
+        aiSettings = await api(`/api/ai-category/settings/${aiEditorProvider}/key`, { method: "DELETE" });
+        renderAiManager();
+        await loadAiSettings();
+        $("#api-manager-status").textContent = `${name} 密钥已删除`;
+      } catch (err) { $("#api-manager-status").textContent = err.message; }
+    });
+    async function loadAiSuggestions() {
+      const data = await api("/api/ai-category/suggestions");
+      const items = data.items || [];
+      $("#ai-category-suggestions").innerHTML = items.map((item) => `
+        <div class="ai-suggestion">
+          <div>
+            <div class="ai-suggestion-title">${esc(item.counterparty || "未知商户")} · ¥${Number(item.amount || 0).toFixed(2)} <span class="badge">建议：${esc(item.category)}</span></div>
+            <div class="small">${esc(item.description || "无说明")}</div>
+            <div class="ai-suggestion-reason">${esc(item.reason || "无解释")} · AI 自评 ${Math.round(Number(item.confidence || 0) * 100)}%</div>
+          </div>
+          <div class="row"><button class="primary small" data-ai-action="accept" data-id="${item.tx_id}">采用</button><button class="small" data-ai-action="reject" data-id="${item.tx_id}">忽略</button></div>
+        </div>`).join("") || '<div class="small" style="margin-top:14px;">暂无 AI 建议。</div>';
+      $("#btn-ai-accept-high").disabled = !items.some((item) => Number(item.confidence) >= .85);
+    }
+    $("#btn-ai-suggest").addEventListener("click", async () => {
+      if (!aiSettings?.providers?.[aiSettings.selected]?.has_key) {
+        await openAiManager();
+        return;
+      }
+      const button = $("#btn-ai-suggest");
+      button.disabled = true;
+      $("#ai-category-status").textContent = "正在分析，请稍候…";
+      try {
+        const result = await api("/api/ai-category/suggest", { method: "POST", body: { limit: 25 } });
+        $("#ai-category-status").textContent = result.created ? `新增 ${result.created} 条建议，先查看再采用` : (result.message || "未生成有效建议");
+        await loadAiSuggestions();
+      } catch (err) {
+        $("#ai-category-status").textContent = "AI 请求失败";
+        showFlash(err.message, true);
+      } finally { button.disabled = false; }
+    });
+    $("#btn-ai-accept-high").addEventListener("click", async () => {
+      try {
+        const result = await api("/api/ai-category/accept-high", { method: "POST" });
+        showFlash(`已采用 ${result.accepted} 条高分建议`);
+        await loadPending(); loadDetail(); loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    });
+    $("#ai-category-suggestions").addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-ai-action]");
+      if (!button) return;
+      button.disabled = true;
+      const id = Number(button.dataset.id);
+      try {
+        if (button.dataset.aiAction === "accept") {
+          await api(`/api/ai-category/suggestions/${id}/accept`, { method: "POST" });
+          showFlash("已采用并记住你的分类选择");
+          await loadPending(); loadDetail(); loadSummary();
+        } else {
+          await api(`/api/ai-category/suggestions/${id}`, { method: "DELETE" });
+          await loadAiSuggestions();
+        }
+      } catch (err) { showFlash(err.message, true); button.disabled = false; }
+    });
 
     function txCard(t) {
       return `<div class="tx-card">
@@ -1649,7 +2035,7 @@
         await api(`/api/transactions/${txId}/category`, { method: "POST", body: { category, remember: true } });
         completedPending.add("u-" + txId);
         showFlash("已分类");
-        renderPending();
+        loadPending();
         loadDetail();
       } catch (err) { showFlash(err.message, true); }
     }
@@ -1849,25 +2235,29 @@
       try {
         const data = await api("/api/transactions?count_in_expense=0");
         const items = data.items || [];
-        $("#excluded-list").innerHTML = items.length ? `
-          <table>
-            <thead><tr><th>时间</th><th>来源</th><th>交易对方</th><th>说明</th><th>金额</th><th>操作</th></tr></thead>
-            <tbody>${items.map((t) => `
-              <tr>
-                <td class="mono">${esc(t.transaction_time || "")}</td>
-                <td>${esc(sourceName[t.source] || t.source)}</td>
-                <td>${esc(t.counterparty || "—")}</td>
-                <td>${esc(t.description || "—")}</td>
-                <td class="amount ${dirClass[t.direction] || "neutral"}">¥${Number(t.amount || 0).toFixed(2)}</td>
-                <td><button class="small" onclick="restoreExcluded(${t.id})">恢复计入</button></td>
-              </tr>`).join("")}</tbody>
-          </table>` : '<div class="empty">没有不计入的账单</div>';
+        const keyword = $("#excluded-keyword").value.trim().toLowerCase();
+        const visible = keyword ? items.filter((t) =>
+          [t.counterparty, t.description, t.exclude_reason, t.branch, t.note]
+            .some((value) => String(value || "").toLowerCase().includes(keyword))) : items;
+        $("#excluded-count").textContent = `${items.length} 笔`;
+        $("#excluded-list").innerHTML = visible.map((t) => `<tr>
+          <td class="mono nowrap">${esc(t.transaction_time || "")}</td>
+          <td>${esc(sourceName[t.source] || t.source)}</td>
+          <td>${esc(t.branch === "生活" ? "总账本" : (t.branch || "总账本"))}</td>
+          <td>${esc(t.counterparty || "—")}</td>
+          <td>${esc(t.description || "—")}</td>
+          <td class="amount ${dirClass[t.direction] || "neutral"}">¥${Number(t.amount || 0).toFixed(2)}<div class="small">${esc(t.direction || "")}</div></td>
+          <td>${esc(t.exclude_reason || "手动设为不记录")}</td>
+          <td><button class="small" onclick="restoreExcluded(${t.id})">恢复到账单</button></td>
+        </tr>`).join("");
+        $("#excluded-empty").textContent = items.length ? "没有符合搜索条件的条目" : "这里还没有不记录的条目";
+        $("#excluded-empty").classList.toggle("hidden", visible.length > 0);
       } catch (err) { showFlash(err.message, true); }
     }
     async function restoreExcluded(id) {
       try {
         await api(`/api/transactions/${id}/count`, { method: "POST", body: { count_in_expense: true } });
-        showFlash("已恢复计入");
+        showFlash("已恢复到账单");
         loadExcluded();
         loadDetail();
         loadSummary();
@@ -1879,28 +2269,40 @@
       $("#merge-modal").classList.remove("hidden");
     });
     $("#btn-merge-close").addEventListener("click", () => $("#merge-modal").classList.add("hidden"));
-    $("#btn-open-excluded").addEventListener("click", async () => {
-      await loadExcluded();
-      $("#excluded-modal").classList.remove("hidden");
-    });
-    $("#btn-excluded-close").addEventListener("click", () => $("#excluded-modal").classList.add("hidden"));
+    $("#btn-excluded-search").addEventListener("click", loadExcluded);
+    $("#excluded-keyword").addEventListener("keydown", (e) => { if (e.key === "Enter") loadExcluded(); });
 
     // ---------------- 明细 ----------------
     let detailState = { selected: new Set(), items: [] };
+    let detailTags = [];
+    let editingTagTxId = null;
+    let creatingLedgerForTxId = null;
     const DETAIL_COLUMNS = [
       { key: "time", label: "时间" },
       { key: "source", label: "来源" },
       { key: "counterparty", label: "交易对方" },
       { key: "description", label: "说明/摘要" },
       { key: "category", label: "分类" },
+      { key: "tags", label: "标签" },
+      { key: "branch", label: "账本" },
       { key: "amount", label: "金额" },
       { key: "direction", label: "方向" },
-      { key: "count", label: "计入" },
+      { key: "count", label: "不记录" },
       { key: "payment_method", label: "支付方式" },
       { key: "merge", label: "合并" },
       { key: "actions", label: "操作" },
     ];
     let visibleColumns = new Set(DETAIL_COLUMNS.map((c) => c.key).filter((key) => !["payment_method", "merge", "direction"].includes(key)));
+
+    async function loadTags() {
+      const data = await api("/api/tags");
+      detailTags = data.items || [];
+      const selected = $("#filter-tag").value;
+      $("#filter-tag").innerHTML = '<option value="">全部标签</option>' + detailTags.map((tag) =>
+        `<option value="${esc(tag.name)}">${esc(tag.name)}</option>`).join("");
+      $("#filter-tag").value = selected;
+      return detailTags;
+    }
 
     async function loadMonths() {
       try {
@@ -1926,11 +2328,12 @@
       if ($("#filter-source").value) q.set("source", $("#filter-source").value);
       if ($("#filter-branch").value) q.set("branch", $("#filter-branch").value);
       if ($("#filter-category").value) q.set("category", $("#filter-category").value);
-      if ($("#filter-count").value) q.set("count_in_expense", $("#filter-count").value);
       if ($("#filter-keyword").value.trim()) q.set("keyword", $("#filter-keyword").value.trim());
       try {
         const data = await api("/api/transactions?" + q.toString());
-        detailState.items = (data.items || []).filter((t) => !t.is_duplicate);
+        const tag = $("#filter-tag").value;
+        detailState.items = (data.items || []).filter((t) =>
+          !t.is_duplicate && (!tag || (t.tags || []).includes(tag)));
         detailState.selected = new Set();
         renderDetail();
       } catch (err) { showFlash(err.message, true); }
@@ -1976,16 +2379,21 @@
           <td data-col="category"><select onchange="setCategory(${t.id}, this.value)">
             ${allCategories.map((c) => `<option value="${c}" ${t.category === c ? "selected" : ""}>${c}</option>`).join("")}
           </select></td>
+          <td data-col="tags"><div class="detail-tags">
+            ${(t.tags || []).map((tag) => `<span class="tag">${esc(tag)}</span>`).join("")}
+            <button class="small" onclick="openDetailTags(${t.id})">${(t.tags || []).length ? "编辑" : "+ 标签"}</button>
+          </div></td>
+          <td data-col="branch"><select class="small detail-ledger-select" onchange="chooseDetailLedger(${t.id}, this)">
+            <option value="生活" ${t.branch === "生活" ? "selected" : ""}>总账本</option>
+            ${ledgerOptions(t.branch)}
+            <option value="__new__">＋ 新建账本…</option>
+          </select></td>
           <td data-col="amount" class="amount ${dirClass[t.direction] || "neutral"}">¥${Number(t.amount || 0).toFixed(2)}</td>
           <td data-col="direction">${esc(t.direction)}</td>
-          <td data-col="count" class="nowrap"><button class="small ${t.count_in_expense ? "" : "danger"}" title="点击切换是否计入汇总" onclick="toggleCount(${t.id}, ${t.count_in_expense ? 0 : 1})">${t.count_in_expense ? "计入 ✓" : "不计入"}</button></td>
+          <td data-col="count" class="nowrap"><button class="small danger" title="移到不记录页面" onclick="toggleCount(${t.id}, 0)">移至不记录</button></td>
           <td data-col="payment_method">${esc(t.payment_method || "")}</td>
           <td data-col="merge">${merge}${undoBtn}</td>
           <td data-col="actions" class="nowrap">
-            <select class="small" onchange="setBranch(${t.id}, this.value)">
-              <option value="生活" ${t.branch === "生活" ? "selected" : ""}>总账本</option>
-              ${ledgerOptions(t.branch)}
-            </select>
             <button class="link small danger" onclick="deleteTx(${t.id})">删除</button>
           </td>
         </tr>`;
@@ -1994,6 +2402,99 @@
       updateSelectionBar();
       applyColumnVisibility();
     }
+
+    function selectedDetailTags() {
+      return $$("#detail-tags-options input[type=checkbox]")
+        .filter((input) => input.checked).map((input) => input.value);
+    }
+    function renderDetailTagOptions(selected) {
+      $("#detail-tags-options").innerHTML = detailTags.length ? detailTags.map((tag) => `
+        <label class="tag-option"><input type="checkbox" value="${esc(tag.name)}" ${selected.has(tag.name) ? "checked" : ""}> ${esc(tag.name)}</label>
+      `).join("") : '<span class="muted">还没有标签，可以在下方新建。</span>';
+    }
+    async function openDetailTags(id) {
+      const tx = detailState.items.find((item) => item.id === id);
+      if (!tx) return;
+      editingTagTxId = id;
+      try {
+        await loadTags();
+        renderDetailTagOptions(new Set(tx.tags || []));
+        $("#detail-new-tag").value = "";
+        $("#detail-tags-modal").classList.remove("hidden");
+      } catch (err) { showFlash(err.message, true); }
+    }
+    $("#btn-detail-tags-close").addEventListener("click", () => $("#detail-tags-modal").classList.add("hidden"));
+    $("#btn-detail-tag-create").addEventListener("click", async () => {
+      const name = $("#detail-new-tag").value.trim();
+      if (!name) { showFlash("请输入标签名称", true); return; }
+      const selected = new Set(selectedDetailTags());
+      try {
+        const data = await api("/api/tags", { method: "POST", body: { name } });
+        selected.add(data.item.name);
+        await loadTags();
+        renderDetailTagOptions(selected);
+        $("#detail-new-tag").value = "";
+      } catch (err) { showFlash(err.message, true); }
+    });
+    $("#detail-new-tag").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") $("#btn-detail-tag-create").click();
+    });
+    $("#btn-detail-tags-save").addEventListener("click", async () => {
+      if (editingTagTxId == null) return;
+      try {
+        await api(`/api/transactions/${editingTagTxId}/tags`, {
+          method: "POST", body: { tags: selectedDetailTags() }
+        });
+        $("#detail-tags-modal").classList.add("hidden");
+        showFlash("标签已保存");
+        await loadDetail();
+      } catch (err) { showFlash(err.message, true); }
+    });
+
+    function openDetailLedgerCreate(txId = null) {
+      creatingLedgerForTxId = txId;
+      $("#detail-new-ledger").value = "";
+      $("#detail-ledger-include-summary").checked = false;
+      $("#detail-ledger-modal").classList.remove("hidden");
+      $("#detail-new-ledger").focus();
+    }
+    function chooseDetailLedger(id, select) {
+      if (select.value === "__new__") {
+        const tx = detailState.items.find((item) => item.id === id);
+        select.value = tx ? tx.branch : "生活";
+        openDetailLedgerCreate(id);
+      } else {
+        setBranch(id, select.value);
+      }
+    }
+    $("#btn-detail-new-ledger").addEventListener("click", () => openDetailLedgerCreate());
+    $("#btn-detail-ledger-close").addEventListener("click", () => $("#detail-ledger-modal").classList.add("hidden"));
+    $("#btn-detail-ledger-create").addEventListener("click", async () => {
+      const name = $("#detail-new-ledger").value.trim();
+      if (!name) { showFlash("请输入账本名称", true); return; }
+      try {
+        const data = await api("/api/ledgers", { method: "POST", body: {
+          name, include_in_summary: $("#detail-ledger-include-summary").checked
+        } });
+        if (data.item.deleted) throw new Error("同名账本在回收站，请先恢复该账本");
+        if (creatingLedgerForTxId != null) {
+          await api(`/api/transactions/${creatingLedgerForTxId}/branch`, {
+            method: "POST", body: { branch: name }
+          });
+        }
+        $("#detail-ledger-modal").classList.add("hidden");
+        showFlash(creatingLedgerForTxId == null ? "账本已创建" : "账本已创建并分配给该交易");
+        const assigned = creatingLedgerForTxId != null;
+        creatingLedgerForTxId = null;
+        await loadLedgers();
+        if (assigned) $("#filter-branch").value = name;
+        await loadDetail();
+        loadSummary();
+      } catch (err) { showFlash(err.message, true); }
+    });
+    $("#detail-new-ledger").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") $("#btn-detail-ledger-create").click();
+    });
 
     function updateCheckAll() {
       const boxes = $$(".tx-check");
@@ -2068,8 +2569,9 @@
     async function toggleCount(id, count) {
       try {
         await api(`/api/transactions/${id}/count`, { method: "POST", body: { count_in_expense: !!count } });
-        showFlash(count ? "已改为计入支出" : "已改为不计入支出");
+        showFlash(count ? "已恢复到账单" : "已移至不记录");
         loadDetail();
+        loadSummary();
       } catch (err) { showFlash(err.message, true); }
     }
     async function deleteTx(id) {
@@ -2143,7 +2645,7 @@
       $("#filter-source").value = "";
       $("#filter-branch").value = "生活";
       $("#filter-category").value = "";
-      $("#filter-count").value = "";
+      $("#filter-tag").value = "";
       $("#filter-keyword").value = "";
       loadDetail();
     });
@@ -2229,8 +2731,7 @@
                 <option value="生活" ${t.branch === "生活" ? "selected" : ""}>总账本</option>
                 ${ledgerOptions(t.branch)}
               </select>
-              ${t.count_in_expense ? '<span class="badge green">计入</span>' : '<span class="badge red">不计入</span>'}
-              <button class="small ${t.count_in_expense ? "danger" : ""}" onclick="toggleCountFromDrill(${t.id}, ${t.count_in_expense ? 0 : 1})">${t.count_in_expense ? "不计入" : "计入"}</button>
+              <button class="small danger" onclick="toggleCountFromDrill(${t.id}, 0)">移至不记录</button>
             </td>
           </tr>`).join("") || '<tr><td colspan="8" class="empty">该分类没有记录</td></tr>';
         $("#drill-modal").classList.remove("hidden");
@@ -2394,6 +2895,8 @@
     window.setLedgerDrillCategory = setLedgerDrillCategory;
     window.toggleLedgerDrillCount = toggleLedgerDrillCount;
     window.setBranch = setBranch;
+    window.chooseDetailLedger = chooseDetailLedger;
+    window.openDetailTags = openDetailTags;
     window.moveBranchFromGrowth = moveBranchFromGrowth;
     window.moveBranchPrompt = moveBranchPrompt;
 
@@ -2420,6 +2923,7 @@
       const months = await loadMonths();
       await loadCategories();
       await loadLedgers();
+      await loadTags();
       await loadSummary();
       switchPage(months && months.available_months && months.available_months.length ? "summary" : "import");
     })();

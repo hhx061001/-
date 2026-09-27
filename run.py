@@ -8,6 +8,11 @@ import sys
 import ctypes
 from datetime import datetime
 
+# Qt WebEngine can leave unpainted bands over scrolling dialogs on some Windows
+# graphics drivers. Use its documented software-rendering fallback by default.
+if sys.platform == "win32":
+    os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu")
+
 from PySide6.QtCore import QObject, QRect, Qt, QUrl, Slot
 from PySide6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPen
 from PySide6.QtWebChannel import QWebChannel
