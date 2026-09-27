@@ -100,24 +100,24 @@ class TitleBar(QWidget):
         self.setObjectName("titleBar")
         self.window = window
         self.drag_pos = None
-        self.setFixedHeight(52)
+        self.setFixedHeight(44)
         self.setFont(QFont("Microsoft YaHei", 9))
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(14, 0, 10, 0)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 0, 6, 0)
+        layout.setSpacing(6)
 
         self.btn_nav = QToolButton()
         self.btn_nav.setObjectName("navBtn")
         self.btn_nav.setText("☰")
         self.btn_nav.setToolTip("展开或收起侧边栏")
-        self.btn_nav.setFixedSize(36, 36)
+        self.btn_nav.setFixedSize(34, 34)
         self.btn_nav.setCursor(Qt.PointingHandCursor)
         self.btn_nav.setFont(QFont("Microsoft YaHei", 9))
 
         self.btn_import = QToolButton()
         self.btn_import.setObjectName("barBtn")
-        self.btn_import.setText("导入账单")
+        self.btn_import.setText("导入")
         self.btn_import.setPopupMode(QToolButton.InstantPopup)
         self.btn_import.setFont(QFont("Microsoft YaHei", 9))
         self.import_menu = QMenu(self.btn_import)
@@ -125,29 +125,22 @@ class TitleBar(QWidget):
 
         self.btn_export = QToolButton()
         self.btn_export.setObjectName("barBtn")
-        self.btn_export.setText("导出报表")
+        self.btn_export.setText("导出")
         self.btn_export.setPopupMode(QToolButton.InstantPopup)
         self.btn_export.setFont(QFont("Microsoft YaHei", 9))
         self.export_menu = QMenu(self.btn_export)
         self.btn_export.setMenu(self.export_menu)
-
-        self.app_mark = QLabel("账")
-        self.app_mark.setObjectName("appMark")
-        self.app_mark.setFixedSize(27, 27)
-        self.app_mark.setAlignment(Qt.AlignCenter)
-        self.app_mark.setAttribute(Qt.WA_TransparentForMouseEvents)
 
         self.app_title = QLabel("账单分析")
         self.app_title.setObjectName("appTitle")
         self.app_title.setAttribute(Qt.WA_TransparentForMouseEvents)
 
         layout.addWidget(self.btn_nav)
-        layout.addWidget(self.app_mark)
         layout.addWidget(self.app_title)
-        layout.addSpacing(18)
+        layout.addStretch()
         layout.addWidget(self.btn_import)
         layout.addWidget(self.btn_export)
-        layout.addStretch()
+        layout.addSpacing(10)
 
         self.btn_min = WindowGlyphButton("min")
         self.btn_max = WindowGlyphButton("max")
@@ -337,21 +330,14 @@ def main():
     qt_app.setStyleSheet(
         """
         QWidget#titleBar {
-            background: #f8faff;
-            border-bottom: 1px solid #dce5f4;
-        }
-        QLabel#appMark {
-            background: #365de3;
-            color: white;
-            border-radius: 7px;
-            font-size: 15px;
-            font-weight: 700;
+            background: #ffffff;
+            border-bottom: 1px solid #e5eaf2;
         }
         QLabel#appTitle {
-            color: #1d2c48;
+            color: #28364f;
             font-size: 13px;
-            font-weight: 700;
-            padding-right: 3px;
+            font-weight: 600;
+            padding-left: 4px;
         }
         QPushButton#winBtn {
             border: none;
@@ -380,25 +366,22 @@ def main():
         QToolButton#navBtn, QToolButton#barBtn {
             border: none;
             background: transparent;
-            border-radius: 9px;
-            color: #344461;
+            border-radius: 6px;
+            color: #53637b;
             font-size: 13px;
-            height: 34px;
+            height: 30px;
             font-family: "Microsoft YaHei";
         }
         QToolButton#barBtn {
-            border: 1px solid #dce5f4;
-            background: #ffffff;
-            padding: 0 13px;
+            padding: 0 9px;
         }
         QToolButton#barBtn::menu-indicator {
             image: none;
             width: 0;
         }
         QToolButton#navBtn:hover, QToolButton#barBtn:hover {
-            background: #eaf0ff;
-            border-color: #bfcdf5;
-            color: #274dd0;
+            background: #f0f3f9;
+            color: #243e78;
         }
         QMenu {
             background: #ffffff;
