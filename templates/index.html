@@ -474,6 +474,17 @@
     #drill-modal .drill-table td:last-child { white-space: normal; }
     #drill-modal .drill-table select { width: 100%; min-width: 0; }
     #drill-modal .drill-table td:last-child button { margin-top: 6px; }
+    #ledger-display-modal { z-index: 61; }
+    #ledger-display-modal .ledger-display-modal-box {
+      width: min(1120px, calc(100vw - 40px));
+      max-height: calc(100vh - 40px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #ledger-display-modal .ledger-display-modal-box > .row:first-child { position: static; flex: 0 0 auto; }
+    #ledger-display-modal .ledger-display-scroll { flex: 1 1 auto; min-height: 0; max-height: none; overflow: auto; }
+    #ledger-amount-modal, #ledger-group-modal { z-index: 62; }
     .api-manager-box { width: min(720px, 100%); }
     .api-provider-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }
     .api-provider-card { text-align: left; padding: 14px 16px; border: 1px solid var(--line); background: #fff; border-radius: 10px; }
@@ -530,6 +541,19 @@
     .detail-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 130px; }
     .detail-tags .tag { margin: 0; max-width: 160px; overflow-wrap: anywhere; }
     .detail-ledger-select { min-width: 125px; max-width: 170px; }
+    .ledger-source-list { display: grid; gap: 7px; margin-top: 9px; padding: 10px; background: #f8fafc; border-radius: 8px; }
+    .ledger-source-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .ledger-group-row { background: #f4f7ff; }
+    .ledger-display-table { min-width: 780px; }
+    .ledger-group-main { display: flex; align-items: flex-start; gap: 12px; }
+    .ledger-group-main details { flex: 1; min-width: 0; }
+    .ledger-amount-trigger {
+      border: 0; border-bottom: 1px dashed currentColor; border-radius: 0;
+      background: transparent; color: inherit; padding: 0 0 1px;
+      font: inherit; font-weight: inherit; white-space: nowrap;
+    }
+    .ledger-amount-trigger:hover { opacity: .72; border-bottom-style: solid; }
+    .ledger-amount-trigger:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
     .detail-table-panel #detail-empty { padding: 45px 20px; }
     .summary-toolbar { display: flex; align-items: center; gap: 10px; padding: 13px 16px; }
     .summary-toolbar .toolbar-spacer { flex: 1; }
@@ -810,6 +834,7 @@
         <div class="row" style="justify-content:space-between; align-items:center;">
           <h1 id="ledger-page-title" style="margin:0;">独立账单</h1>
           <div class="row">
+            <button id="btn-ledger-display" class="primary">查看明细</button>
             <button id="btn-ledger-import">导入文件</button>
             <button id="btn-ledger-manual">手动添加</button>
             <button id="btn-ledger-settings" class="modal-close" title="设置">⚙</button>
@@ -1129,6 +1154,61 @@
     </div>
   </div>
 
+  <div id="ledger-display-modal" class="modal hidden">
+    <div class="modal-box ledger-display-modal-box">
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <h2 id="ledger-display-title" style="margin:0;">账本明细</h2>
+        <button id="btn-ledger-display-close" class="modal-close" aria-label="关闭账本明细">×</button>
+      </div>
+      <p class="section-lead">点击账本金额可修改；也可选中 2 至 200 笔收入、支出组合显示净额。原始流水和导入去重保持原样。</p>
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span id="ledger-selected-count" class="small">未选择交易</span>
+        <div class="row">
+          <button id="btn-ledger-clear-filter" class="hidden">清除分类筛选</button>
+          <button id="btn-ledger-group" class="primary" disabled>组合显示</button>
+        </div>
+      </div>
+      <div class="table-wrap ledger-display-scroll">
+        <table class="ledger-display-table">
+          <thead><tr><th>选</th><th>时间</th><th>交易/组合</th><th>分类</th><th>原始金额</th><th>账本金额</th></tr></thead>
+          <tbody id="ledger-display-body"></tbody>
+        </table>
+        <div id="ledger-display-empty" class="empty hidden">这个账本还没有交易</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ledger-amount-modal" class="modal hidden">
+    <div class="modal-box" style="width:460px;">
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">修改账本金额</h2>
+        <button id="btn-ledger-amount-close" class="modal-close">×</button>
+      </div>
+      <p id="ledger-amount-source" class="muted"></p>
+      <p class="small">只影响独立账本的显示与统计；导入金额和去重依据保持原样。</p>
+      <input id="ledger-amount-input" type="number" min="0" max="1000000000" step="0.01" placeholder="输入新的账本金额" style="width:100%;">
+      <div class="row" style="justify-content:flex-end;margin-top:16px;">
+        <button id="btn-ledger-amount-reset">恢复原金额</button>
+        <button class="primary" id="btn-ledger-amount-save">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ledger-group-modal" class="modal hidden">
+    <div class="modal-box" style="width:500px;">
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">组合显示选中交易</h2>
+        <button id="btn-ledger-group-close" class="modal-close">×</button>
+      </div>
+      <p id="ledger-group-preview" class="muted"></p>
+      <p class="small">这里只改变独立账本中的展示。数据库里仍保留全部原始交易，可随时拆开展示。</p>
+      <input id="ledger-group-title" type="text" maxlength="80" placeholder="组合名称（可选）" style="width:100%;">
+      <div class="row" style="justify-content:flex-end;margin-top:16px;">
+        <button class="primary" id="btn-ledger-group-save">组合显示</button>
+      </div>
+    </div>
+  </div>
+
   <div id="confirm-modal" class="modal hidden">
     <div class="modal-box" style="width:420px;">
       <div class="row" style="justify-content:space-between; align-items:center;">
@@ -1228,7 +1308,7 @@
       detail: ["账单明细", "按月份、来源、账本、分类和标签查找每一笔交易。"],
       excluded: ["不记录", "暂不纳入账单的交易集中放在这里，可随时恢复。"],
       summary: ["月度概览", "查看本月收支、预算与消费结构。"],
-      income: ["独立账本", "单独管理特定用途的收入与支出。"],
+      income: ["独立账本", "单独核算金额，并把相关流水组合显示为净额。"],
     };
     function switchPage(page) {
       $$(".page").forEach((p) => p.classList.remove("active"));
@@ -1301,42 +1381,195 @@
         if (currentLedger) loadLedgerStats();
       } catch (err) { showFlash(err.message, true); }
     }
-    async function loadLedgerStats() {
+    let ledgerDisplayItems = [];
+    let ledgerSelectedIds = new Set();
+    let ledgerDisplayFilter = null;
+    let editingLedgerAmountId = null;
+    function updateLedgerSelection() {
+      const count = ledgerSelectedIds.size;
+      $("#ledger-selected-count").textContent = count ? `已选 ${count} 笔` : "未选择交易";
+      $("#btn-ledger-group").disabled = count < 2 || count > 200;
+      $("#btn-ledger-group").textContent = count ? `组合显示选中 ${count} 笔` : "组合显示";
+    }
+    function openLedgerDisplayModal(filter = null) {
       if (!currentLedger) return;
+      ledgerDisplayFilter = filter;
+      ledgerSelectedIds.clear();
+      $("#ledger-display-title").textContent = filter
+        ? `${currentLedger} · ${filter.category} · ${filter.direction}明细`
+        : `${currentLedger} · 账本明细`;
+      renderLedgerDisplay();
+      $("#ledger-display-modal").classList.remove("hidden");
+    }
+    $("#btn-ledger-display").addEventListener("click", () => openLedgerDisplayModal());
+    $("#btn-ledger-display-close").addEventListener("click", () => $("#ledger-display-modal").classList.add("hidden"));
+    async function loadLedgerStats() {
+      const ledger = currentLedgerItem();
+      if (!ledger) return;
       $("#ledger-page-title").textContent = currentLedger;
       try {
-        const q = new URLSearchParams({ branch: currentLedger });
-        const data = await api("/api/transactions?" + q.toString());
-        const items = (data.items || []).filter((t) => !t.is_duplicate);
-        let income = 0, expense = 0;
+        const data = await api(`/api/ledgers/${ledger.id}/display`);
+        ledgerDisplayItems = data.items || [];
+        ledgerSelectedIds = new Set();
         const incomeMap = {}, expenseMap = {};
-        for (const t of items) {
-          const key = t.category || "其他";
-          if (t.direction === "收入") {
-            income += Number(t.amount || 0);
-            incomeMap[key] = (incomeMap[key] || 0) + Number(t.amount || 0);
-          } else if (t.direction === "支出") {
-            expense += Number(t.amount || 0);
-            expenseMap[key] = (expenseMap[key] || 0) + Number(t.amount || 0);
+        for (const item of ledgerDisplayItems) {
+          const key = item.category || "其他";
+          if (item.direction === "收入") {
+            incomeMap[key] = (incomeMap[key] || 0) + Number(item.amount || 0);
+          } else if (item.direction === "支出") {
+            expenseMap[key] = (expenseMap[key] || 0) + Number(item.amount || 0);
           }
         }
-        $("#ledger-income-total").textContent = "¥" + income.toFixed(2);
-        $("#ledger-expense-total").textContent = "¥" + expense.toFixed(2);
-        $("#ledger-net-total").textContent = "¥" + (income - expense).toFixed(2);
-        renderLedgerBars("#ledger-income-bars", incomeMap, income, "收入");
-        renderLedgerBars("#ledger-expense-bars", expenseMap, expense, "支出");
+        $("#ledger-income-total").textContent = "¥" + Number(data.income || 0).toFixed(2);
+        $("#ledger-expense-total").textContent = "¥" + Number(data.expense || 0).toFixed(2);
+        $("#ledger-net-total").textContent = "¥" + Number(data.net || 0).toFixed(2);
+        renderLedgerBars("#ledger-income-bars", incomeMap, Number(data.income || 0), "收入");
+        renderLedgerBars("#ledger-expense-bars", expenseMap, Number(data.expense || 0), "支出");
+        renderLedgerDisplay();
       } catch (err) { showFlash(err.message, true); }
     }
+    function renderLedgerDisplay() {
+      const visible = ledgerDisplayFilter
+        ? ledgerDisplayItems.filter((item) => item.category === ledgerDisplayFilter.category && item.direction === ledgerDisplayFilter.direction)
+        : ledgerDisplayItems;
+      $("#btn-ledger-clear-filter").classList.toggle("hidden", !ledgerDisplayFilter);
+      $("#ledger-display-body").innerHTML = visible.map((item) => {
+        if (item.type === "group") {
+          return `<tr class="ledger-group-row">
+            <td></td><td class="mono nowrap">${esc(item.transaction_time || "")}</td>
+            <td><div class="ledger-group-main"><details><summary>${esc(item.title)}</summary><div class="ledger-source-list">
+              ${(item.members || []).map((member) => `<div class="ledger-source-line">
+                <span>${esc(member.counterparty || "交易")}</span>
+                <span class="mono">${esc(member.direction)} ¥${Number(member.original_amount || 0).toFixed(2)}</span>
+                <span>账本金额 <button class="ledger-amount-trigger" data-tx-id="${member.id}" title="点击修改账本金额" aria-label="修改账本金额" onclick="openLedgerAmountEditor(${member.id})">¥${Number(member.ledger_amount || 0).toFixed(2)}</button></span>
+              </div>`).join("")}
+            </div></details><button class="small" onclick="ungroupLedgerDisplay(${item.group_id})">拆开展示</button></div></td>
+            <td>${esc(item.category || "其他")}</td>
+            <td class="small">${(item.members || []).length} 笔原始流水</td>
+            <td class="amount ${dirClass[item.direction] || "neutral"}">${esc(item.direction === "不计收支" ? "净额" : `净${item.direction}`)} ¥${Number(item.amount || 0).toFixed(2)}</td>
+          </tr>`;
+        }
+        return `<tr>
+          <td><input type="checkbox" class="ledger-row-check" value="${item.id}" ${ledgerSelectedIds.has(item.id) ? "checked" : ""}></td>
+          <td class="mono nowrap">${esc(item.transaction_time || "")}</td>
+          <td>${esc(item.counterparty || "交易")}<div class="small">${esc(item.description || "")}</div></td>
+          <td>${esc(item.category || "其他")}</td>
+          <td class="mono nowrap">${esc(item.direction)} ¥${Number(item.original_amount || 0).toFixed(2)}</td>
+          <td class="amount ${dirClass[item.direction] || "neutral"}"><button class="ledger-amount-trigger" data-tx-id="${item.id}" title="点击修改账本金额" aria-label="修改账本金额" onclick="openLedgerAmountEditor(${item.id})">¥${Number(item.amount || 0).toFixed(2)}</button>${item.ledger_amount_adjusted ? '<div class="small">已调整</div>' : ""}</td>
+        </tr>`;
+      }).join("");
+      $("#ledger-display-empty").textContent = ledgerDisplayItems.length ? "当前分类没有交易" : "这个账本还没有交易";
+      $("#ledger-display-empty").classList.toggle("hidden", visible.length > 0);
+      updateLedgerSelection();
+    }
+    function filterLedgerDisplay(category, direction) {
+      openLedgerDisplayModal({ category, direction });
+    }
+    $("#btn-ledger-clear-filter").addEventListener("click", () => {
+      ledgerDisplayFilter = null;
+      ledgerSelectedIds.clear();
+      $("#ledger-display-title").textContent = `${currentLedger} · 账本明细`;
+      renderLedgerDisplay();
+    });
+    $("#ledger-display-body").addEventListener("change", (event) => {
+      if (!event.target.classList.contains("ledger-row-check")) return;
+      const id = Number(event.target.value);
+      if (event.target.checked && ledgerSelectedIds.size >= 200) {
+        event.target.checked = false;
+        showFlash("每次最多选择 200 笔交易", true);
+        return;
+      }
+      if (event.target.checked) ledgerSelectedIds.add(id); else ledgerSelectedIds.delete(id);
+      updateLedgerSelection();
+    });
     function renderLedgerBars(selector, map, total, direction) {
       const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
       $(selector).innerHTML = entries.map(([cat, amt]) => {
         const pct = total ? Math.max(0, Math.min(100, amt / total * 100)) : 0;
-        return `<div class="cat-row" data-cat="${esc(cat)}" data-dir="${direction}" onclick="openLedgerDrill(this.dataset.cat, this.dataset.dir)" style="cursor:pointer;">
+        return `<div class="cat-row" data-cat="${esc(cat)}" data-dir="${direction}" onclick="filterLedgerDisplay(this.dataset.cat, this.dataset.dir)" style="cursor:pointer;">
           <div class="cat-name">${esc(cat)}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${catColors[cat] || "#94a3b8"}"></div></div>
           <div class="cat-amt">¥${Number(amt).toFixed(2)} · ${total ? (amt / total * 100).toFixed(1) : 0}%</div>
         </div>`;
       }).join("") || '<div class="empty">暂无记录</div>';
+    }
+    function findLedgerSource(txId) {
+      for (const item of ledgerDisplayItems) {
+        if (item.type === "transaction" && item.id === txId) return item;
+        if (item.type === "group") {
+          const source = (item.members || []).find((member) => member.id === txId);
+          if (source) return source;
+        }
+      }
+      return null;
+    }
+    function openLedgerAmountEditor(txId) {
+      const item = findLedgerSource(txId);
+      if (!item) return;
+      editingLedgerAmountId = txId;
+      $("#ledger-amount-source").textContent = `${item.counterparty || "交易"} · 原始${item.direction} ¥${Number(item.original_amount || 0).toFixed(2)}`;
+      $("#ledger-amount-input").value = Number(item.ledger_amount || 0).toFixed(2);
+      $("#btn-ledger-amount-reset").disabled = !item.ledger_amount_adjusted;
+      $("#ledger-amount-modal").classList.remove("hidden");
+      $("#ledger-amount-input").focus();
+    }
+    $("#btn-ledger-amount-close").addEventListener("click", () => $("#ledger-amount-modal").classList.add("hidden"));
+    $("#btn-ledger-amount-save").addEventListener("click", async () => {
+      if (editingLedgerAmountId == null) return;
+      const amount = $("#ledger-amount-input").value.trim();
+      if (!amount) { showFlash("请输入账本金额", true); return; }
+      try {
+        await api(`/api/transactions/${editingLedgerAmountId}/ledger-amount`, { method: "POST", body: { amount } });
+        $("#ledger-amount-modal").classList.add("hidden");
+        showFlash("账本金额已更新，原始流水未改变");
+        await loadLedgerStats();
+      } catch (err) { showFlash(err.message, true); }
+    });
+    $("#btn-ledger-amount-reset").addEventListener("click", async () => {
+      if (editingLedgerAmountId == null) return;
+      try {
+        await api(`/api/transactions/${editingLedgerAmountId}/ledger-amount`, { method: "DELETE" });
+        $("#ledger-amount-modal").classList.add("hidden");
+        showFlash("已恢复原始金额作为账本金额");
+        await loadLedgerStats();
+      } catch (err) { showFlash(err.message, true); }
+    });
+    $("#ledger-amount-input").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") $("#btn-ledger-amount-save").click();
+    });
+
+    $("#btn-ledger-group").addEventListener("click", () => {
+      if (ledgerSelectedIds.size < 2 || ledgerSelectedIds.size > 200) return;
+      const members = Array.from(ledgerSelectedIds).map(findLedgerSource);
+      const signedCents = members.reduce((sum, item) =>
+        sum + Math.round(Number(item.ledger_amount || 0) * 100) * (item.direction === "支出" ? 1 : -1), 0);
+      $("#ledger-group-preview").textContent = members.map((item) =>
+        `${item.counterparty || "交易"}：${item.direction} ¥${Number(item.ledger_amount || 0).toFixed(2)}`
+      ).join("；") + `。组合净额：${signedCents === 0 ? "收支相抵" : signedCents > 0 ? "支出" : "收入"} ¥${(Math.abs(signedCents) / 100).toFixed(2)}`;
+      $("#ledger-group-title").value = `交易组合（${members.length} 笔）`;
+      $("#ledger-group-modal").classList.remove("hidden");
+    });
+    $("#btn-ledger-group-close").addEventListener("click", () => $("#ledger-group-modal").classList.add("hidden"));
+    $("#btn-ledger-group-save").addEventListener("click", async () => {
+      const ledger = currentLedgerItem();
+      if (!ledger || ledgerSelectedIds.size < 2 || ledgerSelectedIds.size > 200) return;
+      try {
+        await api(`/api/ledgers/${ledger.id}/display-groups`, {
+          method: "POST", body: { tx_ids: Array.from(ledgerSelectedIds), title: $("#ledger-group-title").value.trim() }
+        });
+        $("#ledger-group-modal").classList.add("hidden");
+        ledgerDisplayFilter = null;
+        $("#ledger-display-title").textContent = `${currentLedger} · 账本明细`;
+        showFlash("已组合显示，原始交易仍保留");
+        await loadLedgerStats();
+      } catch (err) { showFlash(err.message, true); }
+    });
+    async function ungroupLedgerDisplay(groupId) {
+      try {
+        await api(`/api/ledger-display-groups/${groupId}`, { method: "DELETE" });
+        showFlash("已拆开展示");
+        await loadLedgerStats();
+      } catch (err) { showFlash(err.message, true); }
     }
     async function openLedgerDrill(category, direction) {
       if (!currentLedger) return;
@@ -1510,8 +1743,9 @@
     }
     function openLedger(name) {
       currentLedger = name;
+      ledgerDisplayFilter = null;
+      $("#ledger-display-modal").classList.add("hidden");
       switchPage("income");
-      loadLedgerStats();
     }
     function ledgerOptions(currentBranch) {
       const active = allLedgers.filter((l) => !l.deleted);
@@ -2892,6 +3126,9 @@
     window.setCategoryFromDrill = setCategoryFromDrill;
     window.toggleCountFromDrill = toggleCountFromDrill;
     window.openLedgerDrill = openLedgerDrill;
+    window.filterLedgerDisplay = filterLedgerDisplay;
+    window.openLedgerAmountEditor = openLedgerAmountEditor;
+    window.ungroupLedgerDisplay = ungroupLedgerDisplay;
     window.setLedgerDrillCategory = setLedgerDrillCategory;
     window.toggleLedgerDrillCount = toggleLedgerDrillCount;
     window.setBranch = setBranch;

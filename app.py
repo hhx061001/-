@@ -435,6 +435,7 @@ def init_db() -> None:
                 month TEXT,
                 ts INTEGER,
                 amount REAL NOT NULL DEFAULT 0,
+                ledger_amount_cents INTEGER CHECK(ledger_amount_cents >= 0),
                 direction TEXT NOT NULL,
                 counterparty TEXT,
                 description TEXT,
@@ -508,6 +509,19 @@ def init_db() -> None:
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS ledger_display_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ledger_id INTEGER NOT NULL,
+                title TEXT NOT NULL DEFAULT '',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS ledger_display_group_items (
+                group_id INTEGER NOT NULL,
+                tx_id INTEGER NOT NULL UNIQUE,
+                PRIMARY KEY (group_id, tx_id)
+            );
+
             CREATE TABLE IF NOT EXISTS monthly_budgets (
                 month TEXT PRIMARY KEY,
                 amount_cents INTEGER NOT NULL CHECK(amount_cents > 0)
@@ -536,6 +550,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE transactions ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'")
         if "branch" not in cols:
             conn.execute("ALTER TABLE transactions ADD COLUMN branch TEXT NOT NULL DEFAULT '生活'")
+        if "ledger_amount_cents" not in cols:
+            conn.execute("ALTER TABLE transactions ADD COLUMN ledger_amount_cents INTEGER")
         cat_cols = [r["name"] for r in conn.execute("PRAGMA table_info(custom_categories)").fetchall()]
         if "group_name" not in cat_cols:
             conn.execute("ALTER TABLE custom_categories ADD COLUMN group_name TEXT NOT NULL DEFAULT '生活'")
@@ -579,6 +595,16 @@ def row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
     else:
         d["tags"] = []
     return d
+
+
+def clear_ledger_display_groups_for_tx(conn: sqlite3.Connection, tx_id: int) -> None:
+    """A display pair must not survive a moved, hidden, or deduplicated source row."""
+    group_ids = [row["group_id"] for row in conn.execute(
+        "SELECT group_id FROM ledger_display_group_items WHERE tx_id=?", (tx_id,)
+    )]
+    for group_id in group_ids:
+        conn.execute("DELETE FROM ledger_display_group_items WHERE group_id=?", (group_id,))
+        conn.execute("DELETE FROM ledger_display_groups WHERE id=?", (group_id,))
 
 
 # --------------------------------------------------------------------------
@@ -1328,6 +1354,9 @@ def merge_transactions(
     if p.get("is_duplicate") or s.get("is_duplicate"):
         return None
 
+    clear_ledger_display_groups_for_tx(conn, primary_id)
+    clear_ledger_display_groups_for_tx(conn, secondary_id)
+
     # 合并优先保留第三方（微信/支付宝）记录。
     if p["source"] == "boc" and s["source"] in ("wx", "alipay"):
         p, s = s, p
@@ -1484,6 +1513,83 @@ def transaction_query(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
         return [row_to_dict(r) for r in rows]
     finally:
         conn.close()
+
+
+def ledger_display_payload(conn: sqlite3.Connection, ledger_id: int) -> Optional[Dict[str, Any]]:
+    """Build independent-ledger rows without changing imported transactions."""
+    ledger = conn.execute(
+        "SELECT * FROM ledgers WHERE id=? AND deleted=0", (ledger_id,)
+    ).fetchone()
+    if not ledger:
+        return None
+    rows = conn.execute(
+        """SELECT * FROM transactions
+           WHERE branch=? AND is_deleted=0 AND is_duplicate=0 AND count_in_expense=1
+           ORDER BY ts DESC, id DESC""",
+        (ledger["name"],),
+    ).fetchall()
+
+    def member(row: sqlite3.Row) -> Dict[str, Any]:
+        item = row_to_dict(row)
+        cents = row["ledger_amount_cents"]
+        if cents is None:
+            cents = int(Decimal(str(row["amount"])) * 100)
+        item["original_amount"] = item["amount"]
+        item["ledger_amount"] = round(cents / 100, 2)
+        item["ledger_amount_adjusted"] = row["ledger_amount_cents"] is not None
+        return item
+
+    by_id = {row["id"]: member(row) for row in rows}
+    grouped_ids: set = set()
+    display_items: List[Dict[str, Any]] = []
+    groups: Dict[int, Dict[str, Any]] = {}
+    for row in conn.execute(
+        """SELECT g.id, g.title, gi.tx_id
+           FROM ledger_display_groups g
+           JOIN ledger_display_group_items gi ON gi.group_id=g.id
+           WHERE g.ledger_id=? ORDER BY g.id, gi.tx_id""",
+        (ledger_id,),
+    ):
+        group = groups.setdefault(row["id"], {"title": row["title"], "ids": []})
+        group["ids"].append(row["tx_id"])
+
+    for group_id, group in groups.items():
+        ids = group["ids"]
+        if len(ids) < 2 or any(tx_id not in by_id for tx_id in ids):
+            continue
+        members = [by_id[tx_id] for tx_id in ids]
+        signed_cents = sum(
+            round(item["ledger_amount"] * 100) * (1 if item["direction"] == "支出" else -1)
+            for item in members
+        )
+        direction = "支出" if signed_cents > 0 else "收入" if signed_cents < 0 else "不计收支"
+        anchor = next((item for item in members if item["direction"] == direction), members[0])
+        latest = max(members, key=lambda item: (item.get("ts") or 0, item["id"]))
+        display_items.append({
+            "type": "group", "group_id": group_id,
+            "id": f"g-{group_id}",
+            "title": group["title"] or f"交易组合（{len(members)} 笔）",
+            "transaction_time": latest["transaction_time"], "ts": latest.get("ts"),
+            "counterparty": anchor["counterparty"], "category": anchor["category"],
+            "direction": direction, "amount": round(abs(signed_cents) / 100, 2),
+            "members": members,
+        })
+        grouped_ids.update(ids)
+
+    for item in by_id.values():
+        if item["id"] not in grouped_ids:
+            display_items.append({
+                **item, "type": "transaction", "amount": item["ledger_amount"]
+            })
+    display_items.sort(key=lambda item: (item.get("ts") or 0, str(item["id"])), reverse=True)
+    income_cents = sum(round(item["amount"] * 100) for item in display_items if item["direction"] == "收入")
+    expense_cents = sum(round(item["amount"] * 100) for item in display_items if item["direction"] == "支出")
+    return {
+        "ledger": dict(ledger), "items": display_items,
+        "income": round(income_cents / 100, 2),
+        "expense": round(expense_cents / 100, 2),
+        "net": round((income_cents - expense_cents) / 100, 2),
+    }
 
 
 def compute_summary(month: Optional[str]) -> Dict[str, Any]:
@@ -1877,6 +1983,8 @@ def api_import_preview():
 def api_reset():
     conn = get_db()
     try:
+        conn.execute("DELETE FROM ledger_display_group_items")
+        conn.execute("DELETE FROM ledger_display_groups")
         conn.execute("DELETE FROM transactions")
         conn.execute("DELETE FROM dedup_candidates")
         conn.commit()
@@ -1980,6 +2088,126 @@ def api_ledgers():
         conn.close()
 
 
+@app.get("/api/ledgers/<int:ledger_id>/display")
+def api_ledger_display(ledger_id: int):
+    conn = get_db()
+    try:
+        payload = ledger_display_payload(conn, ledger_id)
+        return jsonify(payload) if payload else api_error("账本不存在", 404)
+    finally:
+        conn.close()
+
+
+@app.post("/api/transactions/<int:tx_id>/ledger-amount")
+def api_set_ledger_amount(tx_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        amount = Decimal(str(data.get("amount", "")))
+    except InvalidOperation:
+        return api_error("请输入有效的账本金额")
+    if (not amount.is_finite() or amount < 0 or amount > 1000000000
+            or amount.as_tuple().exponent < -2):
+        return api_error("账本金额须为非负数，最多两位小数")
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """SELECT t.id FROM transactions t JOIN ledgers l ON l.name=t.branch
+               WHERE t.id=? AND t.branch!='生活' AND t.is_deleted=0 AND t.is_duplicate=0
+                 AND t.count_in_expense=1 AND l.deleted=0""",
+            (tx_id,),
+        ).fetchone()
+        if not row:
+            return api_error("该交易不在可编辑的独立账本中", 404)
+        conn.execute(
+            "UPDATE transactions SET ledger_amount_cents=? WHERE id=?",
+            (int(amount * 100), tx_id),
+        )
+        conn.commit()
+        return jsonify({"ok": True, "ledger_amount": float(amount)})
+    finally:
+        conn.close()
+
+
+@app.delete("/api/transactions/<int:tx_id>/ledger-amount")
+def api_clear_ledger_amount(tx_id: int):
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT id FROM transactions WHERE id=?", (tx_id,)).fetchone()
+        if not row:
+            return api_error("交易不存在", 404)
+        conn.execute("UPDATE transactions SET ledger_amount_cents=NULL WHERE id=?", (tx_id,))
+        conn.commit()
+        return jsonify({"ok": True})
+    finally:
+        conn.close()
+
+
+@app.post("/api/ledgers/<int:ledger_id>/display-groups")
+def api_create_ledger_display_group(ledger_id: int):
+    data = request.get_json(silent=True) or {}
+    raw_ids = data.get("tx_ids")
+    if not isinstance(raw_ids, list) or not 2 <= len(raw_ids) <= 200:
+        return api_error("请选择 2 至 200 笔交易")
+    try:
+        ids = [int(value) for value in raw_ids]
+    except (TypeError, ValueError):
+        return api_error("交易 ID 无效")
+    if any(tx_id <= 0 for tx_id in ids) or len(set(ids)) != len(ids):
+        return api_error("请选择不同的有效交易")
+    title = str(data.get("title") or "").strip()[:80]
+    conn = get_db()
+    try:
+        ledger = conn.execute(
+            "SELECT * FROM ledgers WHERE id=? AND deleted=0", (ledger_id,)
+        ).fetchone()
+        if not ledger:
+            return api_error("账本不存在", 404)
+        placeholders = ", ".join("?" for _ in ids)
+        rows = conn.execute(
+            f"""SELECT id, direction FROM transactions
+               WHERE id IN ({placeholders}) AND branch=? AND is_deleted=0
+                 AND is_duplicate=0 AND count_in_expense=1""",
+            (*ids, ledger["name"]),
+        ).fetchall()
+        if len(rows) != len(ids) or any(row["direction"] not in ("支出", "收入") for row in rows):
+            return api_error("只能组合当前账本中有效的收入或支出交易")
+        existing = conn.execute(
+            f"SELECT tx_id FROM ledger_display_group_items WHERE tx_id IN ({placeholders})", ids
+        ).fetchone()
+        if existing:
+            return api_error("选中的交易已在展示组合中")
+        group_id = conn.execute(
+            "INSERT INTO ledger_display_groups(ledger_id, title) VALUES (?, ?)",
+            (ledger_id, title),
+        ).lastrowid
+        conn.executemany(
+            "INSERT INTO ledger_display_group_items(group_id, tx_id) VALUES (?, ?)",
+            [(group_id, tx_id) for tx_id in ids],
+        )
+        conn.commit()
+        return jsonify({"ok": True, "group_id": group_id})
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        return api_error("交易已在其他展示组合中")
+    finally:
+        conn.close()
+
+
+@app.delete("/api/ledger-display-groups/<int:group_id>")
+def api_delete_ledger_display_group(group_id: int):
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT id FROM ledger_display_groups WHERE id=?", (group_id,)).fetchone()
+        if not row:
+            return api_error("展示组合不存在", 404)
+        conn.execute("DELETE FROM ledger_display_group_items WHERE group_id=?", (group_id,))
+        conn.execute("DELETE FROM ledger_display_groups WHERE id=?", (group_id,))
+        conn.commit()
+        return jsonify({"ok": True})
+    finally:
+        conn.close()
+
+
 @app.post("/api/ledgers")
 def api_create_ledger():
     data = request.get_json(silent=True) or {}
@@ -2066,6 +2294,12 @@ def api_dissolve_ledger(ledger_id: int):
         if not row:
             return api_error("账本不存在", 404)
         name = row["name"]
+        group_ids = [r["id"] for r in conn.execute(
+            "SELECT id FROM ledger_display_groups WHERE ledger_id=?", (ledger_id,)
+        )]
+        for group_id in group_ids:
+            conn.execute("DELETE FROM ledger_display_group_items WHERE group_id=?", (group_id,))
+            conn.execute("DELETE FROM ledger_display_groups WHERE id=?", (group_id,))
         tx_rows = conn.execute(
             "SELECT * FROM transactions WHERE branch=? AND is_deleted=0",
             (name,),
@@ -2250,6 +2484,7 @@ def api_toggle_count(tx_id: int):
             (count, reason, tx_id),
         )
         if not count:
+            clear_ledger_display_groups_for_tx(conn, tx_id)
             conn.execute("DELETE FROM ai_category_suggestions WHERE tx_id=?", (tx_id,))
         conn.commit()
         return jsonify({"ok": True})
@@ -2273,6 +2508,8 @@ def api_set_branch(tx_id: int):
         row = conn.execute("SELECT * FROM transactions WHERE id=?", (tx_id,)).fetchone()
         if not row:
             return api_error("记录不存在", 404)
+        if row["branch"] != branch:
+            clear_ledger_display_groups_for_tx(conn, tx_id)
         conn.execute("UPDATE transactions SET branch=? WHERE id=?", (branch, tx_id))
         conn.commit()
         return jsonify({"ok": True})
@@ -2284,6 +2521,7 @@ def api_set_branch(tx_id: int):
 def api_delete(tx_id: int):
     conn = get_db()
     try:
+        clear_ledger_display_groups_for_tx(conn, tx_id)
         conn.execute("UPDATE transactions SET is_deleted=1 WHERE id=?", (tx_id,))
         conn.commit()
         return jsonify({"ok": True})
@@ -2299,6 +2537,8 @@ def api_batch_delete():
         return api_error("未选择记录")
     conn = get_db()
     try:
+        for tx_id in ids:
+            clear_ledger_display_groups_for_tx(conn, int(tx_id))
         conn.executemany(
             "UPDATE transactions SET is_deleted=1 WHERE id=?",
             [(int(i),) for i in ids],
