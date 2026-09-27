@@ -50,7 +50,7 @@ class WindowGlyphButton(QPushButton):
         super().__init__("", parent)
         self.kind = kind
         self.is_maximized = False
-        self.setFixedSize(36, 36)
+        self.setFixedSize(42, 38)
         self.setCursor(Qt.PointingHandCursor)
         self.setFont(QFont("Microsoft YaHei", 9))
 
@@ -100,24 +100,24 @@ class TitleBar(QWidget):
         self.setObjectName("titleBar")
         self.window = window
         self.drag_pos = None
-        self.setFixedHeight(44)
-        self.setStyleSheet("background: #f9fafb;")
+        self.setFixedHeight(52)
         self.setFont(QFont("Microsoft YaHei", 9))
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 0, 8, 0)
-        layout.setSpacing(4)
+        layout.setContentsMargins(14, 0, 10, 0)
+        layout.setSpacing(8)
 
         self.btn_nav = QToolButton()
         self.btn_nav.setObjectName("navBtn")
         self.btn_nav.setText("☰")
+        self.btn_nav.setToolTip("展开或收起侧边栏")
         self.btn_nav.setFixedSize(36, 36)
         self.btn_nav.setCursor(Qt.PointingHandCursor)
         self.btn_nav.setFont(QFont("Microsoft YaHei", 9))
 
         self.btn_import = QToolButton()
         self.btn_import.setObjectName("barBtn")
-        self.btn_import.setText("导入")
+        self.btn_import.setText("导入账单")
         self.btn_import.setPopupMode(QToolButton.InstantPopup)
         self.btn_import.setFont(QFont("Microsoft YaHei", 9))
         self.import_menu = QMenu(self.btn_import)
@@ -125,13 +125,26 @@ class TitleBar(QWidget):
 
         self.btn_export = QToolButton()
         self.btn_export.setObjectName("barBtn")
-        self.btn_export.setText("导出")
+        self.btn_export.setText("导出报表")
         self.btn_export.setPopupMode(QToolButton.InstantPopup)
         self.btn_export.setFont(QFont("Microsoft YaHei", 9))
         self.export_menu = QMenu(self.btn_export)
         self.btn_export.setMenu(self.export_menu)
 
+        self.app_mark = QLabel("账")
+        self.app_mark.setObjectName("appMark")
+        self.app_mark.setFixedSize(27, 27)
+        self.app_mark.setAlignment(Qt.AlignCenter)
+        self.app_mark.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+        self.app_title = QLabel("账单分析")
+        self.app_title.setObjectName("appTitle")
+        self.app_title.setAttribute(Qt.WA_TransparentForMouseEvents)
+
         layout.addWidget(self.btn_nav)
+        layout.addWidget(self.app_mark)
+        layout.addWidget(self.app_title)
+        layout.addSpacing(18)
         layout.addWidget(self.btn_import)
         layout.addWidget(self.btn_export)
         layout.addStretch()
@@ -157,9 +170,19 @@ class TitleBar(QWidget):
 
     def mouseMoveEvent(self, event: QMouseEvent):
         if event.buttons() & Qt.LeftButton and self.drag_pos:
+            if self.window.isMaximized():
+                return
             delta = event.globalPosition().toPoint() - self.drag_pos
             self.window.move(self.window.pos() + delta)
             self.drag_pos = event.globalPosition().toPoint()
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent):
+        if event.button() == Qt.LeftButton:
+            self.drag_pos = None
+            self.toggle_maximize()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
 
     def toggle_maximize(self):
         if self.window.isMaximized():
@@ -314,8 +337,21 @@ def main():
     qt_app.setStyleSheet(
         """
         QWidget#titleBar {
-            background: #f9fafb;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            background: #f8faff;
+            border-bottom: 1px solid #dce5f4;
+        }
+        QLabel#appMark {
+            background: #365de3;
+            color: white;
+            border-radius: 7px;
+            font-size: 15px;
+            font-weight: 700;
+        }
+        QLabel#appTitle {
+            color: #1d2c48;
+            font-size: 13px;
+            font-weight: 700;
+            padding-right: 3px;
         }
         QPushButton#winBtn {
             border: none;
@@ -344,22 +380,25 @@ def main():
         QToolButton#navBtn, QToolButton#barBtn {
             border: none;
             background: transparent;
-            border-radius: 8px;
-            color: #0f1115;
+            border-radius: 9px;
+            color: #344461;
             font-size: 13px;
             height: 34px;
             font-family: "Microsoft YaHei";
         }
         QToolButton#barBtn {
-            padding: 0 12px;
+            border: 1px solid #dce5f4;
+            background: #ffffff;
+            padding: 0 13px;
         }
         QToolButton#barBtn::menu-indicator {
             image: none;
             width: 0;
         }
         QToolButton#navBtn:hover, QToolButton#barBtn:hover {
-            background: #f1f3f5;
-            color: #0f1115;
+            background: #eaf0ff;
+            border-color: #bfcdf5;
+            color: #274dd0;
         }
         QMenu {
             background: #ffffff;
