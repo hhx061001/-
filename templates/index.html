@@ -103,7 +103,7 @@
     }
     .brand-copy { display: flex; flex-direction: column; line-height: 1.28; }
     .brand-copy small { font-size: 10px; letter-spacing: .09em; color: #8b98aa; font-weight: 600; margin-top: 4px; }
-    .sidebar nav { display: flex; flex-direction: column; gap: 3px; }
+    .sidebar nav { display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
     .nav-label { font-size: 10px; color: #94a0b1; letter-spacing: .14em; font-weight: 700; padding: 17px 12px 8px; }
     .sidebar nav .nav-label:first-child { padding-top: 0; }
     .sidebar nav button {
@@ -155,8 +155,18 @@
       border-radius: 8px;
       font-size: 13px;
       font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .sidebar-sub button:hover { background: #f2f5fb; color: var(--text); transform: none; }
+    .sidebar-sub .sidebar-create-ledger {
+      margin-top: 5px;
+      color: var(--brand);
+      border: 1px dashed #c9d5f4;
+      background: #f8faff;
+    }
+    .sidebar-sub .sidebar-create-ledger:hover { background: var(--brand-soft); color: var(--brand); border-color: #a9bbed; }
     .sidebar .side-foot { margin-top: auto; font-size: 11px; color: #73839a; padding: 15px 12px; line-height: 1.7; background: #f4f7fc; border-radius: 12px; }
     .privacy-dot { display: inline-block; width: 7px; height: 7px; background: #19a67a; border-radius: 50%; margin-right: 6px; }
     .content { margin-left: 236px; flex: 1; padding: 32px 38px 64px; min-width: 0; }
@@ -696,6 +706,7 @@
             独立账单
           </summary>
           <div id="sidebar-ledgers"></div>
+          <button id="btn-sidebar-create-ledger" class="sidebar-create-ledger" type="button">＋ 新建账本</button>
         </details>
         <div class="nav-label">工具</div>
         <button data-page="import" class="active">
@@ -1171,9 +1182,8 @@
         <h2 style="margin:0;">新建账本</h2>
         <button id="btn-detail-ledger-close" class="modal-close">×</button>
       </div>
-      <p class="muted">新账本创建后可在明细里勾选。单独建账本默认不纳入主账本月度统计。</p>
+      <p class="muted">新账本创建后可在明细里勾选，也会出现在左侧独立账单列表中。</p>
       <input id="detail-new-ledger" type="text" maxlength="40" placeholder="账本名称" style="width:100%;">
-      <label class="tag-option" style="display:inline-flex;margin-top:12px;"><input id="detail-ledger-include-summary" type="checkbox"> 纳入总汇总</label>
       <div class="row" style="justify-content:flex-end;margin-top:16px;">
         <button class="primary" id="btn-detail-ledger-create">创建账本</button>
       </div>
@@ -1186,17 +1196,10 @@
         <h2 style="margin:0;">独立账单设置</h2>
         <button id="btn-ledger-settings-close" class="modal-close">×</button>
       </div>
-      <div class="row" style="margin-bottom:10px;">
-        <input type="text" id="new-ledger-name" placeholder="新建独立账单名称">
-        <button class="primary" id="btn-create-ledger">新建</button>
-      </div>
       <div id="ledger-settings-current">
-        <div class="row" style="margin-bottom:10px;">
-          <input type="text" id="ledger-rename-input" placeholder="新名称">
-          <button id="btn-ledger-rename">重命名</button>
-        </div>
-        <label class="tag-option"><input type="checkbox" id="ledger-include-summary"> 纳入总汇总</label>
-        <div class="row" style="margin-top:12px;">
+        <label for="ledger-rename-input" class="small" style="display:block;margin-bottom:7px;">账单名称</label>
+        <input type="text" id="ledger-rename-input" maxlength="40" style="width:100%;" aria-label="账单名称">
+        <div class="row" style="margin-top:20px;">
           <button class="danger" id="btn-delete-current-ledger">删除当前账本</button>
         </div>
       </div>
@@ -1495,7 +1498,7 @@
         renderCategoryManagement();
         const active = items.filter((l) => !l.deleted);
         $("#sidebar-ledgers").innerHTML = active.map((l) => `
-          <button onclick="openLedger('${esc(l.name)}')">${esc(l.name)}</button>`).join("") || '<div class="empty" style="padding:8px 12px;">暂无账本</div>';
+          <button type="button" data-ledger-id="${l.id}" title="${esc(l.name)}">${esc(l.name)}</button>`).join("") || '<div class="empty" style="padding:8px 12px;">暂无账本</div>';
         const branchSelect = $("#filter-branch");
         const currentBranch = branchSelect.value;
         branchSelect.innerHTML = ['<option value="生活">主账本</option>',
@@ -1507,6 +1510,12 @@
         if (currentLedger) loadLedgerStats();
       } catch (err) { showFlash(err.message, true); }
     }
+    $("#sidebar-ledgers").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-ledger-id]");
+      if (!button) return;
+      const ledger = allLedgers.find((item) => item.id === Number(button.dataset.ledgerId) && !item.deleted);
+      if (ledger) openLedger(ledger.name);
+    });
     let ledgerDisplayItems = [];
     let ledgerSelectedIds = new Set();
     let ledgerDisplayFilter = null;
@@ -1827,42 +1836,59 @@
       } catch (err) { showFlash(err.message, true); }
       finally { button.disabled = false; }
     });
+    let settingsLedgerId = null;
+    let settingsOriginalName = "";
+    let renamePromptPromise = null;
     $("#btn-ledger-settings").addEventListener("click", () => {
       const l = currentLedgerItem();
       if (!l) { showFlash("请先选择独立账单", true); return; }
-      $("#ledger-include-summary").checked = !!l.include_in_summary;
+      settingsLedgerId = l.id;
+      settingsOriginalName = l.name;
+      $("#ledger-rename-input").value = l.name;
       $("#ledger-settings-modal").classList.remove("hidden");
     });
-    $("#btn-ledger-settings-close").addEventListener("click", () => $("#ledger-settings-modal").classList.add("hidden"));
-    $("#btn-ledger-rename").addEventListener("click", async () => {
-      const l = currentLedgerItem();
-      const name = $("#ledger-rename-input").value.trim();
-      if (!l || !name) { showFlash("请输入新名称", true); return; }
-      try {
-        await api(`/api/ledgers/${l.id}`, { method: "PUT", body: { name, include_in_summary: l.include_in_summary } });
-        currentLedger = name;
-        $("#ledger-rename-input").value = "";
-        showFlash("已重命名");
-        loadLedgers();
-      } catch (err) { showFlash(err.message, true); }
+    function confirmLedgerRename() {
+      if (renamePromptPromise) return renamePromptPromise;
+      const input = $("#ledger-rename-input");
+      const name = input.value.trim();
+      if (name === settingsOriginalName) return Promise.resolve(true);
+      if (!name) { showFlash("账单名称不能为空", true); input.value = settingsOriginalName; return Promise.resolve(false); }
+      const ledger = allLedgers.find((item) => item.id === settingsLedgerId && !item.deleted);
+      if (!ledger) { showFlash("账单不存在", true); return Promise.resolve(false); }
+      renamePromptPromise = (async () => {
+        const confirmed = await askConfirm(`将「${settingsOriginalName}」改为「${name}」，是否保存？`, {
+          confirmText: "保存", danger: false
+        });
+        if (!confirmed) { input.value = settingsOriginalName; return false; }
+        try {
+          const oldName = settingsOriginalName;
+          const filteredThisLedger = $("#filter-branch").value === oldName;
+          await api(`/api/ledgers/${ledger.id}`, {
+            method: "PUT", body: { name, include_in_summary: ledger.include_in_summary }
+          });
+          currentLedger = name;
+          settingsOriginalName = name;
+          input.value = name;
+          showFlash("账单名称已保存");
+          await loadLedgers();
+          if (filteredThisLedger) $("#filter-branch").value = name;
+          loadSummary();
+          return true;
+        } catch (err) { showFlash(err.message, true); return false; }
+      })().finally(() => { renamePromptPromise = null; });
+      return renamePromptPromise;
+    }
+    $("#ledger-rename-input").addEventListener("change", () => { void confirmLedgerRename(); });
+    $("#ledger-rename-input").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") { event.preventDefault(); event.target.blur(); }
     });
-    $("#btn-create-ledger").addEventListener("click", async () => {
-      const name = $("#new-ledger-name").value.trim();
-      if (!name) { showFlash("请输入名称", true); return; }
-      try {
-        await api("/api/ledgers", { method: "POST", body: { name } });
-        $("#new-ledger-name").value = "";
-        showFlash("已创建");
-        loadLedgers();
-      } catch (err) { showFlash(err.message, true); }
+    $("#btn-ledger-settings-close").addEventListener("click", async () => {
+      const saved = await confirmLedgerRename();
+      if (saved) $("#ledger-settings-modal").classList.add("hidden");
     });
-    $("#ledger-include-summary").addEventListener("change", async (e) => {
-      const l = currentLedgerItem();
-      if (!l) return;
-      try { await api(`/api/ledgers/${l.id}`, { method: "PUT", body: { include_in_summary: e.target.checked } }); loadSummary(); loadLedgers(); }
-      catch (err) { showFlash(err.message, true); }
-    });
+    $("#btn-sidebar-create-ledger").addEventListener("click", () => openDetailLedgerCreate());
     $("#btn-delete-current-ledger").addEventListener("click", async () => {
+      if (!(await confirmLedgerRename())) return;
       const l = currentLedgerItem();
       if (!l) return;
       if (!(await askConfirm(`删除「${l.name}」并移入回收站？`))) return;
@@ -1929,10 +1955,6 @@
       };
       input.click();
     });
-    async function toggleLedgerSummary(id, value) {
-      try { await api(`/api/ledgers/${id}`, { method: "PUT", body: { include_in_summary: !!value } }); loadLedgers(); loadSummary(); }
-      catch (err) { showFlash(err.message, true); }
-    }
     async function deleteLedger(id) {
       if (!(await askConfirm("删除后进入回收站，确定删除这个独立账单吗？"))) return;
       try { await api(`/api/ledgers/${id}`, { method: "DELETE" }); showFlash("已移入回收站"); loadLedgers(); loadSummary(); }
@@ -3012,7 +3034,6 @@
     function openDetailLedgerCreate(txId = null) {
       creatingLedgerForTxId = txId;
       $("#detail-new-ledger").value = "";
-      $("#detail-ledger-include-summary").checked = false;
       $("#detail-ledger-modal").classList.remove("hidden");
       $("#detail-new-ledger").focus();
     }
@@ -3031,9 +3052,7 @@
       const name = $("#detail-new-ledger").value.trim();
       if (!name) { showFlash("请输入账本名称", true); return; }
       try {
-        const data = await api("/api/ledgers", { method: "POST", body: {
-          name, include_in_summary: $("#detail-ledger-include-summary").checked
-        } });
+        const data = await api("/api/ledgers", { method: "POST", body: { name } });
         if (data.item.deleted) throw new Error("同名账本在回收站，请先恢复该账本");
         if (creatingLedgerForTxId != null) {
           await api(`/api/transactions/${creatingLedgerForTxId}/ledgers`, {
