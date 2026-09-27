@@ -21,7 +21,10 @@ for pkg in ("flask", "openpyxl", "xlrd"):
     except Exception:
         pass
 
-datas = [(os.path.join(project_root, "templates"), "templates")]
+datas = [
+    (os.path.join(project_root, "templates"), "templates"),
+    (os.path.join(project_root, "static"), "static"),
+]
 binaries = []
 
 a = Analysis(
@@ -94,7 +97,8 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="个人账单分析工具",
+    name="每笔有数",
+    icon=os.path.join(project_root, "static", "logo.ico"),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

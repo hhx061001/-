@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>个人账单分析工具</title>
+  <title>每笔有数</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
   <style>
     :root {
       --bg: #f3f5f9;
@@ -95,14 +96,8 @@
       gap: 10px;
       padding: 0 10px 31px;
     }
-    .sidebar .brand-mark {
-      width: 36px; height: 36px; border-radius: 11px;
-      background: #365de3;
-      display: flex; align-items: center; justify-content: center;
-      color: #fff; font-size: 17px; font-weight: 800;
-    }
+    .sidebar .brand-mark { width: 36px; height: 36px; border-radius: 11px; object-fit: contain; flex: none; }
     .brand-copy { display: flex; flex-direction: column; line-height: 1.28; }
-    .brand-copy small { font-size: 10px; letter-spacing: .09em; color: #8b98aa; font-weight: 600; margin-top: 4px; }
     .sidebar nav { display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
     .nav-label { font-size: 10px; color: #94a0b1; letter-spacing: .14em; font-weight: 700; padding: 17px 12px 8px; }
     .sidebar nav .nav-label:first-child { padding-top: 0; }
@@ -678,8 +673,8 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark">账</span>
-        <span class="brand-copy">账单分析<small>LOCAL FINANCE</small></span>
+        <img class="brand-mark" src="/static/logo.svg" alt="">
+        <span class="brand-copy">每笔有数</span>
       </div>
       <nav>
         <div class="nav-label">工作台</div>
@@ -3548,7 +3543,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `账单分析_${month || "全部"}.xlsx`;
+        a.download = `每笔有数_${month || "全部"}.xlsx`;
         document.body.appendChild(a);
         a.click();
         a.remove();

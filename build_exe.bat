@@ -14,7 +14,7 @@ echo 正在打包单文件 exe...
 py -m PyInstaller --noconfirm --clean --workpath output\build --distpath output\dist packaging\bill-analyzer.spec
 if errorlevel 1 goto :error
 echo.
-echo 打包完成：output\dist\个人账单分析工具.exe
+echo 打包完成：output\dist\每笔有数.exe
 pause
 exit /b 0
 :error

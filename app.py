@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""个人账单分析工具 - 后端
+"""每笔有数 - 后端
 
 本地运行：python app.py
 本地服务只监听 127.0.0.1；用户主动启用 AI 分类时才调用外部 API。
@@ -33,7 +33,7 @@ from ai_category import (
 )
 
 
-APP_NAME = "个人账单分析工具"
+APP_NAME = "每笔有数"
 
 
 def get_base_dir() -> str:
@@ -3802,7 +3802,7 @@ def api_export():
     except Exception as exc:  # noqa: BLE001
         logging.exception("export failed")
         return api_error(f"导出失败：{exc}", 500)
-    filename = f"账单分析_{month or '全部'}.xlsx"
+    filename = f"每笔有数_{month or '全部'}.xlsx"
     return send_file(
         out,
         as_attachment=True,

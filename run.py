@@ -14,14 +14,13 @@ if sys.platform == "win32":
     os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu")
 
 from PySide6.QtCore import QEvent, QObject, QRect, Qt, QUrl, Slot
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QMouseEvent, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QMouseEvent, QPainter, QPen
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
     QHBoxLayout,
-    QLabel,
     QMainWindow,
     QMenu,
     QPushButton,
@@ -38,6 +37,7 @@ from app import (
     export_excel,
     find_free_port,
     get_db,
+    get_resource_path,
     import_file_object,
     init_db,
 )
@@ -131,6 +131,8 @@ class ResizeGrip(QWidget):
 class ResizableMainWindow(QMainWindow):
     """Frameless main window with native drag resizing on all edges and corners."""
 
+    WINDOW_FLAGS = (Qt.Window | Qt.FramelessWindowHint |
+                    Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint)
     RESIZE_MARGIN = 7
     RESIZE_CORNER = 10
 
@@ -225,12 +227,7 @@ class TitleBar(QWidget):
         self.export_menu = QMenu(self.btn_export)
         self.btn_export.setMenu(self.export_menu)
 
-        self.app_title = QLabel("账单分析")
-        self.app_title.setObjectName("appTitle")
-        self.app_title.setAttribute(Qt.WA_TransparentForMouseEvents)
-
         layout.addWidget(self.btn_nav)
-        layout.addWidget(self.app_title)
         layout.addStretch()
         layout.addWidget(self.btn_import)
         layout.addWidget(self.btn_export)
@@ -335,7 +332,7 @@ class Bridge(QObject):
         try:
             data = export_excel(month, None, branch)
             label = "总账本" if branch == "生活" else branch
-            filename = f"账单分析_{label}_{month or '全部'}.xlsx"
+            filename = f"每笔有数_{label}_{month or '全部'}.xlsx"
             path, _ = QFileDialog.getSaveFileName(
                 None,
                 "保存 Excel",
@@ -370,7 +367,7 @@ class Bridge(QObject):
     def save_export(self, month, columns):
         try:
             data = export_excel(month, columns)
-            filename = f"账单分析_{month or '全部'}.xlsx"
+            filename = f"每笔有数_{month or '全部'}.xlsx"
             path, _ = QFileDialog.getSaveFileName(
                 None,
                 "保存 Excel",
@@ -421,17 +418,12 @@ def main():
 
     qt_app = QApplication(sys.argv)
     qt_app.setFont(QFont("Microsoft YaHei", 9))
+    qt_app.setWindowIcon(QIcon(get_resource_path("static/logo.png")))
     qt_app.setStyleSheet(
         """
         QWidget#titleBar {
             background: #ffffff;
             border-bottom: 1px solid #e5eaf2;
-        }
-        QLabel#appTitle {
-            color: #28364f;
-            font-size: 13px;
-            font-weight: 600;
-            padding-left: 4px;
         }
         QPushButton#winBtn {
             border: none;
@@ -498,7 +490,9 @@ def main():
         """
     )
     window = ResizableMainWindow()
-    window.setWindowFlags(Qt.FramelessWindowHint)
+    window.setWindowFlags(ResizableMainWindow.WINDOW_FLAGS)
+    window.setWindowTitle("每笔有数")
+    window.setWindowIcon(QIcon(get_resource_path("static/logo.png")))
     window.resize(1280, 860)
     window.apply_window_corners = lambda rounded=True: set_window_corners(window, rounded)
 
