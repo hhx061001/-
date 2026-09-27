@@ -1581,6 +1581,17 @@
         renderLedgerDisplay();
       } catch (err) { showFlash(err.message, true); }
     }
+    const ledgerCategoryWidthCache = new Map();
+    const ledgerCategoryMeasure = document.createElement("canvas").getContext("2d");
+    function ledgerCategoryControlWidth(category) {
+      const label = String(category || "其他");
+      if (!ledgerCategoryWidthCache.has(label)) {
+        const style = getComputedStyle($(".ledger-display-table"));
+        ledgerCategoryMeasure.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        ledgerCategoryWidthCache.set(label, Math.ceil(ledgerCategoryMeasure.measureText(label).width) + 1);
+      }
+      return ledgerCategoryWidthCache.get(label);
+    }
     function renderLedgerDisplay() {
       const visible = ledgerDisplayFilter
         ? ledgerDisplayItems.filter((item) => item.category === ledgerDisplayFilter.category && item.direction === ledgerDisplayFilter.direction)
@@ -1595,7 +1606,7 @@
               ${(item.members || []).map((member) => `<div class="ledger-source-line">
                 <span>${esc(member.counterparty || "交易")}</span>
                 <span class="mono">${esc(member.direction)} ¥${Number(member.original_amount || 0).toFixed(2)}</span>
-                <select class="ledger-category-select" style="width:${Math.max(4, String(member.category || "其他").length * 2 + 1)}ch" data-tx-id="${member.id}" data-current-category="${esc(member.category || "其他")}" aria-label="修改原始交易分类" title="点击修改分类" onchange="chooseCategory(this, ${member.id}, 'ledger')">
+                <select class="ledger-category-select" style="width:${ledgerCategoryControlWidth(member.category)}px" data-tx-id="${member.id}" data-current-category="${esc(member.category || "其他")}" aria-label="修改原始交易分类" title="点击修改分类" onchange="chooseCategory(this, ${member.id}, 'ledger')">
                   ${categoryOptions(member.category)}
                 </select>
                 <button class="small" onclick="openTransactionLedgers(${member.id})">账本（${(member.ledger_ids || []).length}）</button>
@@ -1604,7 +1615,7 @@
               <div class="ledger-source-actions"><button class="small" onclick="ungroupLedgerDisplay(${item.group_id})">拆开展示</button></div>
             </div></details></div></td>
             <td><button class="ledger-category-summary" title="展开后逐笔修改分类" onclick="this.closest('tr').querySelector('details').open=true">${(item.top_categories || [item.category || "其他"]).map(esc).join(" · ")}</button></td>
-            <td class="small">展开后逐笔设置</td>
+            <td class="small">--</td>
             <td class="mono nowrap">${esc(item.original_direction)} ¥${Number(item.original_amount || 0).toFixed(2)}</td>
             <td class="amount ${dirClass[item.direction] || "neutral"}">¥${Number(item.amount || 0).toFixed(2)}</td>
           </tr>`;
@@ -1613,7 +1624,7 @@
           <td><input type="checkbox" class="ledger-row-check" value="${item.id}" ${ledgerSelectedIds.has(String(item.id)) ? "checked" : ""}></td>
           <td class="mono">${dateTimeLines(item.transaction_time)}</td>
           <td>${esc(item.counterparty || "交易")}<div class="small">${esc(item.description || "")}</div></td>
-          <td><select class="ledger-category-select" style="width:${Math.max(4, String(item.category || "其他").length * 2 + 1)}ch" data-tx-id="${item.id}" data-current-category="${esc(item.category || "其他")}" aria-label="修改交易分类" title="点击修改分类" onchange="chooseCategory(this, ${item.id}, 'ledger')">
+          <td><select class="ledger-category-select" style="width:${ledgerCategoryControlWidth(item.category)}px" data-tx-id="${item.id}" data-current-category="${esc(item.category || "其他")}" aria-label="修改交易分类" title="点击修改分类" onchange="chooseCategory(this, ${item.id}, 'ledger')">
             ${categoryOptions(item.category)}
           </select></td>
           <td><button class="small" onclick="openTransactionLedgers(${item.id})">账本（${(item.ledger_ids || []).length}）</button></td>
