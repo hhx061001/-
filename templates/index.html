@@ -255,16 +255,16 @@
     .stat .label { color: var(--muted); font-size: 13px; }
     .stat .value { font-size: 23px; font-weight: 700; margin-top: 5px; }
     .stat .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
-    .cat-row { display: flex; align-items: center; gap: 20px; margin: 9px 0; padding: 5px 4px; border-radius: 8px; transition: background .12s; }
+    .cat-row { display: flex; align-items: center; gap: 14px; margin: 9px 0; padding: 5px 4px; border-radius: 8px; transition: background .12s; }
     .cat-row:hover { background: #f8fafc; }
-    .cat-name { flex: 0 0 clamp(130px, 15vw, 190px); min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cat-name { flex: 0 0 clamp(90px, 20%, 128px); min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .bar-track { flex: 1; min-width: 60px; height: 22px; background: #eef1f6; border-radius: 6px; overflow: hidden; }
     .bar-fill { height: 100%; border-radius: 6px; min-width: 2px; }
     .budget-track { height: 14px; background: #eef1f6; border-radius: 7px; overflow: hidden; margin: 12px 0 8px; }
     .budget-fill { height: 100%; background: var(--brand); border-radius: 7px; }
     .budget-fill.near { background: var(--amber); }
     .budget-fill.over { background: var(--danger); }
-    .cat-amt { flex: 0 0 170px; text-align: right; font-size: 13px; white-space: nowrap; }
+    .cat-amt { flex: 0 0 auto; text-align: right; font-size: 13px; white-space: nowrap; }
     .candidate {
       border: 1px solid #fde68a;
       background: #fffbeb;
@@ -609,7 +609,7 @@
     .summary-main .bar-track { height: 10px; border-radius: 999px; }
     .summary-main .bar-fill { border-radius: 999px; }
     .summary-main .cat-name { font-size: 12px; }
-    .summary-main .cat-amt { flex-basis: 145px; }
+    .summary-main .cat-amt { flex-basis: auto; }
     .summary-aside .top-expenses-row:last-child { border-bottom: 0 !important; }
     .budget-track { margin-top: 18px; }
     @media (max-width: 1180px) {
@@ -625,8 +625,8 @@
     }
     @media (max-width: 760px) {
       .cat-row { gap: 10px; }
-      .cat-name { flex-basis: 110px; }
-      .cat-amt, .summary-main .cat-amt { flex-basis: 110px; font-size: 11px; }
+      .cat-name { flex-basis: clamp(76px, 20%, 100px); }
+      .cat-amt, .summary-main .cat-amt { flex-basis: auto; font-size: 11px; }
       .bar-track { min-width: 24px; }
       .ai-suggestion, .api-provider-list { grid-template-columns: 1fr; }
       .app-shell { display: block; }

@@ -13,8 +13,8 @@ from datetime import datetime
 if sys.platform == "win32":
     os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu")
 
-from PySide6.QtCore import QObject, QRect, Qt, QUrl, Slot
-from PySide6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPen
+from PySide6.QtCore import QEvent, QObject, QRect, Qt, QUrl, Slot
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QMouseEvent, QPainter, QPen
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import (
@@ -53,9 +53,13 @@ class WindowGlyphButton(QPushButton):
         self.setFixedSize(42, 38)
         self.setCursor(Qt.PointingHandCursor)
         self.setFont(QFont("Microsoft YaHei", 9))
+        self.use_system_glyphs = sys.platform == "win32" and QFontDatabase.hasFamily("Segoe MDL2 Assets")
+        self.setToolTip({"min": "最小化", "max": "最大化", "close": "关闭"}[kind])
 
     def set_maximized(self, maximized):
         self.is_maximized = maximized
+        if self.kind == "max":
+            self.setToolTip("还原窗口" if maximized else "最大化")
         self.update()
 
     def paintEvent(self, event):
@@ -71,6 +75,19 @@ class WindowGlyphButton(QPushButton):
             color = QColor("#0f1115")
         else:
             color = QColor("#61666b")
+
+        if self.use_system_glyphs:
+            glyph = {
+                "min": "\ue921", "max": "\ue923" if self.is_maximized else "\ue922",
+                "close": "\ue8bb",
+            }[self.kind]
+            font = QFont("Segoe MDL2 Assets")
+            font.setPixelSize(12)
+            painter.setFont(font)
+            painter.setPen(color)
+            painter.drawText(self.rect(), Qt.AlignCenter, glyph)
+            painter.end()
+            return
 
         pen = QPen(color, 1.25)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
@@ -92,6 +109,83 @@ class WindowGlyphButton(QPushButton):
             painter.drawLine(c.x() + 4, c.y() - 4, c.x() - 4, c.y() + 4)
 
         painter.end()
+
+
+class ResizeGrip(QWidget):
+    """Transparent edge that starts the platform's native resize operation."""
+
+    def __init__(self, window, edges, cursor):
+        super().__init__(window)
+        self.main_window = window
+        self.edges = edges
+        self.setCursor(cursor)
+        self.setAttribute(Qt.WA_NoSystemBackground)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.LeftButton and self.main_window.start_resize(self.edges):
+            event.accept()
+        else:
+            event.ignore()
+
+
+class ResizableMainWindow(QMainWindow):
+    """Frameless main window with native drag resizing on all edges and corners."""
+
+    RESIZE_MARGIN = 7
+    RESIZE_CORNER = 10
+
+    def __init__(self):
+        super().__init__()
+        self.resize_grips = {
+            "top": ResizeGrip(self, Qt.TopEdge, Qt.SizeVerCursor),
+            "bottom": ResizeGrip(self, Qt.BottomEdge, Qt.SizeVerCursor),
+            "left": ResizeGrip(self, Qt.LeftEdge, Qt.SizeHorCursor),
+            "right": ResizeGrip(self, Qt.RightEdge, Qt.SizeHorCursor),
+            "top_left": ResizeGrip(self, Qt.TopEdge | Qt.LeftEdge, Qt.SizeFDiagCursor),
+            "top_right": ResizeGrip(self, Qt.TopEdge | Qt.RightEdge, Qt.SizeBDiagCursor),
+            "bottom_left": ResizeGrip(self, Qt.BottomEdge | Qt.LeftEdge, Qt.SizeBDiagCursor),
+            "bottom_right": ResizeGrip(self, Qt.BottomEdge | Qt.RightEdge, Qt.SizeFDiagCursor),
+        }
+        self.setMinimumSize(560, 420)
+
+    def start_resize(self, edges):
+        handle = self.windowHandle()
+        return bool(handle and handle.startSystemResize(edges))
+
+    def layout_resize_grips(self):
+        if not hasattr(self, "resize_grips"):
+            return
+        width, height = self.width(), self.height()
+        margin, corner = self.RESIZE_MARGIN, self.RESIZE_CORNER
+        areas = {
+            "top": (corner, 0, max(0, width - 2 * corner), margin),
+            "bottom": (corner, height - margin, max(0, width - 2 * corner), margin),
+            "left": (0, corner, margin, max(0, height - 2 * corner)),
+            "right": (width - margin, corner, margin, max(0, height - 2 * corner)),
+            "top_left": (0, 0, corner, corner),
+            "top_right": (width - corner, 0, corner, corner),
+            "bottom_left": (0, height - corner, corner, corner),
+            "bottom_right": (width - corner, height - corner, corner, corner),
+        }
+        resizable = not (self.isMaximized() or self.isFullScreen())
+        for name, grip in self.resize_grips.items():
+            grip.setGeometry(*areas[name])
+            grip.setVisible(resizable)
+            if resizable:
+                grip.raise_()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.layout_resize_grips()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.layout_resize_grips()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange:
+            self.layout_resize_grips()
 
 
 class TitleBar(QWidget):
@@ -403,7 +497,7 @@ def main():
         }
         """
     )
-    window = QMainWindow()
+    window = ResizableMainWindow()
     window.setWindowFlags(Qt.FramelessWindowHint)
     window.resize(1280, 860)
     window.apply_window_corners = lambda rounded=True: set_window_corners(window, rounded)
