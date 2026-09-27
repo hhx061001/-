@@ -1013,7 +1013,7 @@
       </div>
       <p class="muted">分类可设置主账本归属，并自动进入多个独立账本；对已有和以后归类的交易生效。单笔交易的手动选择优先。删除分类后记录会回到“其他”。</p>
       <div class="row" style="margin-bottom:10px;">
-        <button class="primary" id="btn-add-category">添加标签</button>
+        <button class="primary" id="btn-add-category">添加分类</button>
       </div>
       <div id="categories-list"></div>
     </div>
@@ -1042,16 +1042,16 @@
   <div id="category-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="category-create-title">
     <div class="modal-box" style="width:min(520px,100%);">
       <div class="row" style="justify-content:space-between;align-items:center;">
-        <h2 id="category-create-title" style="margin:0;">添加标签</h2>
-        <button id="btn-category-create-close" class="modal-close" aria-label="关闭添加标签">×</button>
+        <h2 id="category-create-title" style="margin:0;">添加分类</h2>
+        <button id="btn-category-create-close" class="modal-close" aria-label="关闭添加分类">×</button>
       </div>
-      <label class="field-label" for="category-create-name">标签名称</label>
+      <label class="field-label" for="category-create-name">分类名称</label>
       <input id="category-create-name" type="text" maxlength="40" placeholder="输入新分类名称" style="width:100%;margin:8px 0 16px;">
       <div class="field-label">选择关联账本</div>
       <p class="small">该分类的交易会自动进入勾选的账本；不勾选主账本则自动移出主账本。单笔手动设置优先。</p>
       <div id="category-create-ledgers" class="ledger-category-options"></div>
       <div class="row" style="justify-content:flex-end;margin-top:16px;">
-        <button class="primary" id="btn-category-create-save">添加标签</button>
+        <button class="primary" id="btn-category-create-save">添加分类</button>
       </div>
     </div>
   </div>
@@ -1139,7 +1139,7 @@
       </div>
       <p class="muted">把选中的记录统一归到某个分类。</p>
       <div class="batch-actions" id="batch-category-options"></div>
-      <div class="row" style="margin-top:12px;"><button id="btn-batch-add-category">添加标签</button></div>
+      <div class="row" style="margin-top:12px;"><button id="btn-batch-add-category">添加分类</button></div>
     </div>
   </div>
 
@@ -1214,7 +1214,7 @@
       </div>
       <p class="small">勾选的分类会自动进入此账本，对已有和以后归类的交易生效。同一分类可绑定多个账本；单笔手动设置优先。</p>
       <div id="ledger-bound-category-options" class="ledger-category-options"></div>
-      <div class="row" style="margin-top:10px;"><button id="btn-ledger-bound-add-category">添加标签</button></div>
+      <div class="row" style="margin-top:10px;"><button id="btn-ledger-bound-add-category">添加分类</button></div>
       <p class="small">取消绑定只取消自动归属。交易原有账本归属和主账本规则可在账单明细、分类管理中调整。</p>
       <div class="row" style="justify-content:flex-end;margin-top:16px;">
         <button class="primary" id="btn-ledger-bound-categories-save">保存绑定分类</button>
@@ -2448,7 +2448,7 @@
               ${txCard(t)}
               <div class="row" style="margin-top:10px;">
                 ${allCategories.map((c) => `<button class="small" data-cat="${esc(c)}" onclick="classifyPendingItem(${t.id}, this.dataset.cat)">${esc(c)}</button>`).join(" ")}
-                <button class="small" onclick="openCreateCategory('pending', ${t.id})">添加标签</button>
+                <button class="small" onclick="openCreateCategory('pending', ${t.id})">添加分类</button>
                 <button class="small danger" onclick="excludePendingItem(${t.id})">设为不计入</button>
               </div>
             </div>
@@ -2529,7 +2529,7 @@
           </div>
           <div class="batch-actions">
             ${allCategories.map((c) => `<button class="small" data-cp="${esc(m.counterparty)}" data-cat="${esc(c)}" onclick="classifyMerchant(this.dataset.cp, this.dataset.cat)">${esc(c)}</button>`).join(" ")}
-            <button class="small" data-cp="${esc(m.counterparty)}" onclick="openCreateCategory('merchant', this.dataset.cp)">添加标签</button>
+            <button class="small" data-cp="${esc(m.counterparty)}" onclick="openCreateCategory('merchant', this.dataset.cp)">添加分类</button>
           </div>
         </div>`).join("") || '<div class="empty">没有可批量分类的商户</div>';
     }
@@ -2585,7 +2585,7 @@
     function categoryOptions(selected = "") {
       return allCategories.map((category) =>
         `<option value="${esc(category)}" ${category === selected ? "selected" : ""}>${esc(category)}</option>`
-      ).join("") + `<option value="${ADD_CATEGORY_VALUE}">＋ 添加标签</option>`;
+      ).join("") + `<option value="${ADD_CATEGORY_VALUE}">＋ 添加分类</option>`;
     }
     function chooseCategory(select, txId, source) {
       const category = select.value;
@@ -2696,7 +2696,7 @@
       };
       const selected = new Set(ledger ? [ledger.id] : [0]);
       $("#category-create-name").value = "";
-      $("#category-create-title").textContent = "添加标签";
+      $("#category-create-title").textContent = "添加分类";
       $("#category-create-ledgers").innerHTML = [
         `<label><input type="checkbox" value="0" ${selected.has(0) ? "checked" : ""}>主账本</label>`,
         ...allLedgers.filter((item) => !item.deleted).map((item) =>
@@ -2709,7 +2709,7 @@
       const context = categoryCreateContext;
       if (!context) return;
       const name = $("#category-create-name").value.trim();
-      if (!name) { showFlash("请输入标签名称", true); return; }
+      if (!name) { showFlash("请输入分类名称", true); return; }
       if (allCategories.includes(name)) { showFlash("该分类已存在，请直接选择", true); return; }
       const checked = $$("#category-create-ledgers input:checked").map((input) => Number(input.value));
       const button = $("#btn-category-create-save");
@@ -2744,7 +2744,7 @@
         }
         $("#category-create-modal").classList.add("hidden");
         if (context.fromBoundModal) $("#btn-ledger-bound-categories").click();
-        showFlash(context.kind === "none" || context.kind === "manual" ? "标签已添加" : "标签已添加并应用分类");
+        showFlash(context.kind === "none" || context.kind === "manual" ? "分类已添加" : "分类已添加并应用");
         await Promise.all([loadPending(), loadDetail(), loadSummary(), loadLedgers()]);
         if (!$("#drill-modal").classList.contains("hidden")) {
           if (activeDrill === "ledger") openLedgerDrill(drillCategory, drillDirection);
