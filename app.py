@@ -80,6 +80,7 @@ SOURCES = {
     "alipay": "支付宝",
     "boc": "中国银行",
     "manual": "手动",
+    "other": "其他账单",
 }
 
 CATEGORY_KEYWORDS: Dict[str, List[str]] = {
@@ -121,25 +122,30 @@ THIRD_PARTY_BANK_KEYWORDS = ["中国银行", "中行"]
 HUABEI_BANK_KEYWORDS = ["支付宝", "花呗", "财付通", "微信", "信用卡"]
 
 COLUMN_ALIASES: Dict[str, List[str]] = {
-    "transaction_time": ["交易时间", "交易日期", "记账日期", "交易时间戳"],
+    "transaction_time": [
+        "交易时间", "交易日期", "记账日期", "交易时间戳", "日期", "时间",
+        "记账时间", "入账时间", "入账日期", "消费时间", "支付时间", "付款时间",
+        "发生时间", "发生日期", "账务日期", "交易发生时间", "交易日期时间", "Date", "Datetime",
+        "Transaction Date", "Posted Date",
+    ],
     "type": ["交易类型", "交易分类", "业务类型"],
-    "counterparty": ["交易对方", "对方账户名称", "对方户名", "商户名称"],
+    "counterparty": ["交易对方", "对方账户名称", "对方户名", "商户名称", "收款方", "付款方", "商家", "商户", "交易对象", "对方名称", "Merchant", "Payee"],
     "counterparty_account": ["对方账号", "对方账户账号", "对方账户"],
-    "description": ["商品", "商品说明", "业务摘要", "摘要"],
-    "direction": ["收-支", "收支", "收/支", "资金流向"],
-    "amount": ["金额", "金额(元)", "交易金额"],
+    "description": ["商品", "商品说明", "业务摘要", "摘要", "交易摘要", "交易说明", "用途", "项目", "内容", "商品名称", "Description", "Memo"],
+    "direction": ["收-支", "收支", "收/支", "资金流向", "收支类型", "交易方向", "借贷标志", "借贷方向", "收入/支出", "Direction"],
+    "amount": ["金额", "金额(元)", "交易金额", "发生金额", "变动金额", "收支金额", "实付金额", "支付金额", "消费金额", "Amount", "Amount(CNY)"],
     "payment_method": [
         "支付方式", "收-付款方式", "交易渠道", "交易渠道-场所",
         "交易渠道/场所", "交易渠道及场所",
     ],
     "status": ["当前状态", "交易状态"],
-    "transaction_no": ["交易单号", "交易订单号", "流水号"],
+    "transaction_no": ["交易单号", "交易订单号", "流水号", "交易流水号", "订单号", "Transaction ID"],
     "merchant_no": ["商户单号", "商家订单号"],
     "note": ["备注", "附言"],
     "currency": ["币种"],
     "cash_note": ["钞汇", "钞汇标志"],
-    "income_amount": ["收入金额", "收入", "存入金额"],
-    "expense_amount": ["支出金额", "支出", "支取金额"],
+    "income_amount": ["收入金额", "收入", "存入金额", "贷方金额", "入账金额", "流入金额", "Credit"],
+    "expense_amount": ["支出金额", "支出", "支取金额", "借方金额", "出账金额", "流出金额", "Debit"],
     "balance": ["余额", "账户余额"],
 }
 
@@ -155,7 +161,8 @@ def norm_header(value: Any) -> str:
     s = str(value).strip()
     s = s.replace("\ufeff", "").replace("\u3000", "").replace(" ", "")
     s = s.replace("（", "").replace("）", "").replace("(", "").replace(")", "")
-    return s
+    s = s.replace("\r", "").replace("\n", "").replace(":", "").replace("：", "")
+    return s.casefold()
 
 
 def decode_bytes(raw: bytes) -> Tuple[str, str]:
@@ -187,6 +194,8 @@ def clean_money(value: Any) -> Optional[float]:
         .replace(" ", "")
         .replace("\u3000", "")
     )
+    if s.startswith("(") and s.endswith(")"):
+        s = "-" + s[1:-1]
     if s in ("", "-", "--", "/", "—"):
         return None
     try:
@@ -278,7 +287,7 @@ def map_headers(cells: List[Any]) -> Dict[str, int]:
         for alias in aliases:
             target = norm_header(alias)
             for idx, value in enumerate(normalized):
-                if value == target:
+                if value == target or value in (target + "元", target + "人民币", target + "cny"):
                     result[key] = idx
                     break
             if key in result:
@@ -287,11 +296,37 @@ def map_headers(cells: List[Any]) -> Dict[str, int]:
 
 
 def is_header_row(cells: List[Any]) -> bool:
-    normed = [norm_header(c) for c in cells if str(c or "").strip()]
-    joined = "".join(normed)
-    if "交易时间" not in joined:
-        return False
-    return "金额" in joined or "收入金额" in joined or "支出金额" in joined
+    mapped = map_headers(cells)
+    return "transaction_time" in mapped and any(
+        key in mapped for key in ("amount", "income_amount", "expense_amount")
+    )
+
+
+def find_header_row(rows: List[List[str]]) -> Optional[int]:
+    best_idx, best_score = None, -1
+    for i, row in enumerate(rows[:60]):
+        if not is_header_row(row):
+            continue
+        mapped = map_headers(row)
+        score = len(mapped) + 2 * int("transaction_time" in mapped)
+        if score > best_score:
+            best_idx, best_score = i, score
+    return best_idx
+
+
+def suggest_header_row(rows: List[List[str]]) -> int:
+    """For unknown columns, show the most header-like row in manual mapping."""
+    best_idx, best_score = 0, -1
+    for i, row in enumerate(rows[:60]):
+        cells = [str(cell or "").strip() for cell in row]
+        filled = [cell for cell in cells if cell]
+        if len(filled) < 2:
+            continue
+        score = len(filled) + 3 * len(map_headers(row))
+        score += sum(any(word in cell.casefold() for word in ("日期", "时间", "金额", "date", "amount")) for cell in filled)
+        if score > best_score:
+            best_idx, best_score = i, score
+    return best_idx
 
 
 def detect_source_from_cells(cells: List[Any]) -> Optional[str]:
@@ -299,9 +334,11 @@ def detect_source_from_cells(cells: List[Any]) -> Optional[str]:
     joined = "".join(normed)
     if "交易订单号" in joined or "商家订单号" in joined:
         return "alipay"
-    if "交易单号" in joined or "商户单号" in joined:
+    if "交易单号" in joined and "商户单号" in joined:
         return "wx"
-    if "收入金额" in joined and "支出金额" in joined:
+    if "收入金额" in joined and "支出金额" in joined and any(
+        marker in joined for marker in ("钞汇", "交易渠道及场所", "对方账户账号")
+    ):
         return "boc"
     return None
 
@@ -318,13 +355,17 @@ def detect_source_from_filename(filename: str) -> Optional[str]:
 
 
 def infer_direction(direction_field: str, amount: Optional[float]) -> str:
-    d = direction_field or ""
-    if "收入" in d:
+    d = (direction_field or "").strip().casefold()
+    if any(word in d for word in ("收入", "收款", "转入", "存入", "退款", "贷方", "credit", "refund")):
         return "收入"
-    if "支出" in d:
+    if any(word in d for word in ("支出", "付款", "支付", "消费", "转出", "取出", "借方", "debit")):
         return "支出"
     if "不计" in d:
         return "不计收支"
+    if d in ("收", "入", "贷", "+"):
+        return "收入"
+    if d in ("支", "出", "借", "-"):
+        return "支出"
     if amount is None or amount == 0:
         return "不计收支"
     # 缺少方向字段时保守处理，交给用户手工修正。
@@ -534,8 +575,15 @@ def _parse_rows(
     source: str,
     filename: str,
     raw_builder,
+    canonical_override: Optional[Dict[str, int]] = None,
+    default_direction: str = "",
+    signed_amounts: bool = False,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    canonical = map_headers(rows[header_idx])
+    canonical = canonical_override or map_headers(rows[header_idx])
+    generic_schema = source == "other" or (
+        source == "boc" and "amount" in canonical
+        and "income_amount" not in canonical and "expense_amount" not in canonical
+    )
     transactions: List[Dict[str, Any]] = []
     warnings: List[Dict[str, Any]] = []
 
@@ -548,13 +596,40 @@ def _parse_rows(
 
         time_raw = cell_value(cells, canonical, "transaction_time")
         time_str, ts = parse_datetime(time_raw)
+        if generic_schema and ts is None:
+            warnings.append({"line": row_no, "reason": "不是可识别的交易日期，已跳过", "raw": raw_line})
+            continue
 
-        if source in ("wx", "alipay"):
+        if source in ("wx", "alipay") or generic_schema:
             amount_raw = cell_value(cells, canonical, "amount")
             amount_float = clean_money(amount_raw)
             direction = infer_direction(
                 cell_value(cells, canonical, "direction"), amount_float
             )
+            if generic_schema:
+                income = clean_money(cell_value(cells, canonical, "income_amount"))
+                expense = clean_money(cell_value(cells, canonical, "expense_amount"))
+                if income not in (None, 0) and expense not in (None, 0):
+                    warnings.append({"line": row_no, "reason": "收入和支出列同时有金额，已跳过以免记错账", "raw": raw_line})
+                    continue
+                if income not in (None, 0):
+                    amount_float, direction = income, "收入"
+                elif expense not in (None, 0):
+                    amount_float, direction = expense, "支出"
+                elif amount_float is None:
+                    warnings.append({"line": row_no, "reason": "金额无法解析，已跳过", "raw": raw_line})
+                    continue
+                elif direction == "不计收支":
+                    if amount_float < 0:
+                        direction = "支出"
+                    elif signed_amounts and amount_float > 0:
+                        direction = "收入"
+                    elif default_direction in ("收入", "支出"):
+                        direction = default_direction
+                    elif any(word in norm_header(rows[header_idx][canonical["amount"]]) for word in ("消费", "支付", "支出")):
+                        direction = "支出"
+                    else:
+                        warnings.append({"line": row_no, "reason": "无法判断收支方向，已按不计收支导入；可在明细中修改", "raw": raw_line})
             amount = normalize_amount(amount_float)
 
             if not time_raw and amount_float is None:
@@ -601,16 +676,22 @@ def _parse_rows(
                 "balance": "",
                 "raw_line": raw_line,
             }
-            if rec["transaction_no"]:
+            if rec["transaction_no"] and not generic_schema:
                 rec["unique_key"] = f"{source}:{rec['transaction_no']}"
+            elif not generic_schema:
+                rec["unique_key"] = stable_key(
+                    source, time_str or time_raw, amount,
+                    rec["counterparty"], rec["description"], raw_line,
+                )
             else:
                 rec["unique_key"] = stable_key(
                     source,
                     time_str or time_raw,
                     amount,
+                    direction,
                     rec["counterparty"],
                     rec["description"],
-                    raw_line,
+                    rec["transaction_no"] or raw_line,
                 )
         else:  # boc
             income = clean_money(cell_value(cells, canonical, "income_amount"))
@@ -683,95 +764,170 @@ def _parse_rows(
     return transactions, warnings
 
 
-def parse_csv(filename: str, raw: bytes) -> Dict[str, Any]:
-    text, encoding = decode_bytes(raw)
-    reader = csv.reader(io.StringIO(text))
-    rows = [[c if c is not None else "" for c in row] for row in reader]
+def _parse_tabular(
+    filename: str,
+    rows: List[List[str]],
+    encoding: str,
+    raw_builder,
+    mapping: Optional[Dict[str, int]] = None,
+    header_row: Optional[int] = None,
+    default_direction: str = "",
+) -> Dict[str, Any]:
+    if not rows or not any(any(str(c or "").strip() for c in row) for row in rows):
+        return {"filename": filename, "source": None, "encoding": encoding,
+                "error": "文件中没有可读取的表格内容。", "transactions": [], "warnings": []}
+    if mapping is not None:
+        if header_row is None or not 0 <= header_row < len(rows):
+            return {"filename": filename, "source": None, "encoding": encoding,
+                    "error": "表头行超出文件范围。", "transactions": [], "warnings": []}
+        allowed = set(COLUMN_ALIASES)
+        try:
+            canonical = {key: int(value) for key, value in mapping.items()
+                         if key in allowed and value not in (None, "")}
+        except (TypeError, ValueError):
+            return {"filename": filename, "source": None, "encoding": encoding,
+                    "error": "列位置无效。", "transactions": [], "warnings": []}
+        if any(idx < 0 or idx >= len(rows[header_row]) for idx in canonical.values()):
+            return {"filename": filename, "source": None, "encoding": encoding,
+                    "error": "列位置超出表头范围。", "transactions": [], "warnings": []}
+        if len(set(canonical.values())) != len(canonical):
+            return {"filename": filename, "source": None, "encoding": encoding,
+                    "error": "同一列不能映射为多个字段。", "transactions": [], "warnings": []}
+        header_idx = header_row
+    else:
+        header_idx = find_header_row(rows)
+        canonical = map_headers(rows[header_idx]) if header_idx is not None else {}
 
-    header_idx = None
-    for i, row in enumerate(rows):
-        if is_header_row(row):
-            header_idx = i
-            break
-    if header_idx is None:
+    if "transaction_time" not in canonical or not any(
+        key in canonical for key in ("amount", "income_amount", "expense_amount")
+    ):
+        suggested = suggest_header_row(rows)
         return {
-            "filename": filename,
-            "source": None,
-            "encoding": encoding,
-            "error": "未找到以「交易时间」开头的表头行，请确认文件格式。",
-            "transactions": [],
-            "warnings": [],
+            "filename": filename, "source": None, "encoding": encoding,
+            "error": "未能自动识别日期和金额列，请在下方指定表头及对应列。",
+            "needs_mapping": True, "header_row": suggested,
+            "headers": [str(v or "").strip() for v in rows[suggested]] if rows else [],
+            "suggested_mapping": map_headers(rows[suggested]) if rows else {},
+            "transactions": [], "warnings": [],
         }
 
-    source = detect_source_from_filename(filename) or detect_source_from_cells(rows[header_idx])
-    if source not in SOURCES:
-        return {
-            "filename": filename,
-            "source": None,
-            "encoding": encoding,
-            "error": "无法识别账单来源，请通过文件名包含“微信 / 支付宝 / 中国银行”或检查表头。",
-            "transactions": [],
-            "warnings": [],
-        }
-
-    transactions, warnings = _parse_rows(
-        rows, header_idx, source, filename, lambda cells: ",".join(str(c) for c in cells)
+    assert header_idx is not None
+    source = detect_source_from_cells(rows[header_idx]) or detect_source_from_filename(filename) or "other"
+    signed_amounts = False
+    generic_schema = source == "other" or (
+        source == "boc" and "amount" in canonical
+        and "income_amount" not in canonical and "expense_amount" not in canonical
     )
+    if (generic_schema and "amount" in canonical and "direction" not in canonical
+            and "income_amount" not in canonical and "expense_amount" not in canonical
+            and not any(word in norm_header(rows[header_idx][canonical["amount"]])
+                        for word in ("消费", "支付", "支出"))):
+        signed_amounts = any(
+            (value := clean_money(cell_value(row, canonical, "amount"))) is not None
+            and value < 0 for row in rows[header_idx + 1:]
+        )
+        if not signed_amounts and not default_direction:
+            return {
+                "filename": filename, "source": source, "encoding": encoding,
+                "error": "金额列没有收支方向，无法安全判断正数是收入还是支出。请选择默认方向后导入。",
+                "needs_mapping": True, "header_row": header_idx,
+                "headers": [str(v or "").strip() for v in rows[header_idx]],
+                "suggested_mapping": canonical, "transactions": [], "warnings": [],
+            }
+    transactions, warnings = _parse_rows(
+        rows, header_idx, source, filename, raw_builder,
+        canonical_override=canonical, default_direction=default_direction,
+        signed_amounts=signed_amounts,
+    )
+    if not transactions:
+        return {
+            "filename": filename, "source": source, "encoding": encoding,
+            "error": "没有找到有效交易记录；请核对表头行和列映射。",
+            "transactions": [], "warnings": warnings,
+        }
     return {
-        "filename": filename,
-        "source": source,
-        "encoding": encoding,
-        "error": None,
-        "transactions": transactions,
-        "warnings": warnings,
+        "filename": filename, "source": source, "encoding": encoding,
+        "error": None, "transactions": transactions, "warnings": warnings,
         "total_rows": max(0, len(rows) - header_idx - 1),
     }
 
 
-def _read_xlsx(raw: bytes) -> List[List[str]]:
+def parse_csv(
+    filename: str, raw: bytes, mapping: Optional[Dict[str, int]] = None,
+    header_row: Optional[int] = None, default_direction: str = "",
+) -> Dict[str, Any]:
+    rows, encoding, delimiter = _read_csv(raw)
+    return _parse_tabular(
+        filename, rows, encoding, lambda cells: delimiter.join(str(c) for c in cells),
+        mapping, header_row, default_direction,
+    )
+
+
+def _read_csv(raw: bytes) -> Tuple[List[List[str]], str, str]:
+    text, encoding = decode_bytes(raw)
+    candidates = []
+    for delimiter in (",", ";", "\t", "|"):
+        rows = [[c if c is not None else "" for c in row]
+                for row in csv.reader(io.StringIO(text), delimiter=delimiter)]
+        sample_rows = rows[:60]
+        recognized = max((len(map_headers(row)) for row in sample_rows
+                          if is_header_row(row)), default=0)
+        multi_column = sum(len(row) > 1 for row in sample_rows)
+        width = max((len(row) for row in sample_rows), default=0)
+        candidates.append(((recognized, multi_column, width), delimiter, rows))
+    _, delimiter, rows = max(candidates, key=lambda candidate: candidate[0])
+    return rows, encoding, delimiter
+
+
+def _read_xlsx(raw: bytes) -> List[Tuple[str, List[List[str]]]]:
     from openpyxl import load_workbook
 
     wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
-    ws = wb.active
-    rows: List[List[str]] = []
-    for row in ws.iter_rows(values_only=True):
-        rows.append(["" if v is None else str(v) for v in row])
+    sheets: List[Tuple[str, List[List[str]]]] = []
+    for ws in wb.worksheets:
+        rows = [["" if v is None else str(v) for v in row]
+                for row in ws.iter_rows(values_only=True)]
+        sheets.append((ws.title, rows))
     wb.close()
-    return rows
+    return sheets
 
 
-def _read_xls(raw: bytes) -> List[List[str]]:
+def _read_xls(raw: bytes) -> List[Tuple[str, List[List[str]]]]:
     try:
         import xlrd
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("读取 .xls 需要 xlrd，请将文件另存为 .xlsx。") from exc
 
     book = xlrd.open_workbook(file_contents=raw)
-    sheet = book.sheet_by_index(0)
-    rows: List[List[str]] = []
-    for r in range(sheet.nrows):
-        vals: List[str] = []
-        for c in range(sheet.ncols):
-            cell = sheet.cell(r, c)
-            if cell.ctype == xlrd.XL_CELL_DATE:
-                try:
-                    dt = xlrd.xldate_as_datetime(cell.value, book.datemode)
-                    if dt.hour or dt.minute or dt.second:
-                        vals.append(dt.strftime("%Y-%m-%d %H:%M:%S"))
-                    else:
-                        vals.append(dt.strftime("%Y-%m-%d"))
-                except Exception:
+    sheets: List[Tuple[str, List[List[str]]]] = []
+    for sheet in book.sheets():
+        rows: List[List[str]] = []
+        for r in range(sheet.nrows):
+            vals: List[str] = []
+            for c in range(sheet.ncols):
+                cell = sheet.cell(r, c)
+                if cell.ctype == xlrd.XL_CELL_DATE:
+                    try:
+                        dt = xlrd.xldate_as_datetime(cell.value, book.datemode)
+                        vals.append(dt.strftime("%Y-%m-%d %H:%M:%S") if
+                                    dt.hour or dt.minute or dt.second else dt.strftime("%Y-%m-%d"))
+                    except Exception:
+                        vals.append(str(cell.value))
+                else:
                     vals.append(str(cell.value))
-            else:
-                vals.append(str(cell.value))
-        rows.append(vals)
-    return rows
+            rows.append(vals)
+        sheets.append((sheet.name, rows))
+    return sheets
 
 
-def parse_excel(filename: str, raw: bytes) -> Dict[str, Any]:
+def parse_excel(
+    filename: str, raw: bytes, mapping: Optional[Dict[str, int]] = None,
+    header_row: Optional[int] = None, default_direction: str = "",
+    sheet_index: Optional[int] = None,
+) -> Dict[str, Any]:
     ext = os.path.splitext(filename)[1].lower()
     try:
-        rows = _read_xls(raw) if ext == ".xls" else _read_xlsx(raw)
+        sheets = _read_xls(raw) if ext == ".xls" else _read_xlsx(raw)
     except Exception as exc:
         return {
             "filename": filename,
@@ -782,52 +938,39 @@ def parse_excel(filename: str, raw: bytes) -> Dict[str, Any]:
             "warnings": [],
         }
 
-    header_idx = None
-    for i, row in enumerate(rows[:40]):
-        if is_header_row(row):
-            header_idx = i
-            break
-    if header_idx is None:
-        return {
-            "filename": filename,
-            "source": None,
-            "encoding": "",
-            "error": "未找到包含「交易时间 / 收入金额 / 支出金额」的表头行。",
-            "transactions": [],
-            "warnings": [],
-        }
-
-    source = detect_source_from_filename(filename) or detect_source_from_cells(rows[header_idx])
-    if source not in SOURCES:
-        return {
-            "filename": filename,
-            "source": None,
-            "encoding": "",
-            "error": "无法识别账单来源，请确认表头列名。",
-            "transactions": [],
-            "warnings": [],
-        }
-
-    transactions, warnings = _parse_rows(
-        rows, header_idx, source, filename, lambda cells: " | ".join(str(c) for c in cells)
+    if not sheets:
+        return {"filename": filename, "source": None, "encoding": "",
+                "error": "Excel 文件没有工作表。", "transactions": [], "warnings": []}
+    if sheet_index is not None and not 0 <= sheet_index < len(sheets):
+        return {"filename": filename, "source": None, "encoding": "",
+                "error": "工作表位置无效。", "transactions": [], "warnings": []}
+    if sheet_index is None:
+        sheet_index = max(range(len(sheets)), key=lambda i: (
+            len(map_headers(sheets[i][1][find_header_row(sheets[i][1])]))
+            if find_header_row(sheets[i][1]) is not None else 0
+        ))
+    sheet_name, rows = sheets[sheet_index]
+    result = _parse_tabular(
+        filename, rows, "", lambda cells: " | ".join(str(c) for c in cells),
+        mapping, header_row, default_direction,
     )
-    return {
-        "filename": filename,
-        "source": source,
-        "encoding": "",
-        "error": None,
-        "transactions": transactions,
-        "warnings": warnings,
-        "total_rows": max(0, len(rows) - header_idx - 1),
-    }
+    result["sheet_name"] = sheet_name
+    if result.get("needs_mapping"):
+        result["sheet_index"] = sheet_index
+        result["sheet_names"] = [name for name, _ in sheets]
+    return result
 
 
-def parse_file(filename: str, raw: bytes) -> Dict[str, Any]:
+def parse_file(
+    filename: str, raw: bytes, mapping: Optional[Dict[str, int]] = None,
+    header_row: Optional[int] = None, default_direction: str = "",
+    sheet_index: Optional[int] = None,
+) -> Dict[str, Any]:
     ext = os.path.splitext(filename)[1].lower()
     if ext == ".csv":
-        return parse_csv(filename, raw)
+        return parse_csv(filename, raw, mapping, header_row, default_direction)
     if ext in (".xlsx", ".xls"):
-        return parse_excel(filename, raw)
+        return parse_excel(filename, raw, mapping, header_row, default_direction, sheet_index)
     return {
         "filename": filename,
         "source": None,
@@ -1141,10 +1284,15 @@ def run_cross_source_dedup() -> int:
 # --------------------------------------------------------------------------
 
 
-def import_file_object(file_storage, branch: Optional[str] = None) -> Dict[str, Any]:
+def import_file_object(
+    file_storage, branch: Optional[str] = None,
+    mapping: Optional[Dict[str, int]] = None,
+    header_row: Optional[int] = None, default_direction: str = "",
+    sheet_index: Optional[int] = None,
+) -> Dict[str, Any]:
     filename = file_storage.filename or "未命名文件"
     raw = file_storage.read()
-    parsed = parse_file(filename, raw)
+    parsed = parse_file(filename, raw, mapping, header_row, default_direction, sheet_index)
     if parsed.get("error"):
         return parsed
 
@@ -1528,12 +1676,26 @@ def health():
 def api_import():
     files = request.files.getlist("files")
     branch = request.form.get("branch") or None
+    try:
+        mapping_text = request.form.get("mapping")
+        mapping = json.loads(mapping_text) if mapping_text else None
+        if mapping is not None and not isinstance(mapping, dict):
+            raise ValueError("列映射必须是对象")
+        header_row = int(request.form["header_row"]) if "header_row" in request.form else None
+        sheet_index = int(request.form["sheet_index"]) if "sheet_index" in request.form else None
+    except (ValueError, json.JSONDecodeError) as exc:
+        return api_error(f"导入选项无效：{exc}")
+    default_direction = request.form.get("default_direction", "")
+    if default_direction not in ("", "收入", "支出", "不计收支"):
+        return api_error("默认收支方向无效")
     if not files:
         return api_error("未收到文件")
     results = []
     for f in files:
         try:
-            results.append(import_file_object(f, branch))
+            results.append(import_file_object(
+                f, branch, mapping, header_row, default_direction, sheet_index
+            ))
         except Exception as exc:  # noqa: BLE001
             logging.exception("import failed: %s", f.filename)
             results.append(
@@ -1547,6 +1709,43 @@ def api_import():
                 }
             )
     return jsonify({"results": results})
+
+
+@app.post("/api/import/preview")
+def api_import_preview():
+    uploaded = request.files.get("file")
+    if not uploaded:
+        return api_error("未收到文件")
+    try:
+        raw = uploaded.read()
+        ext = os.path.splitext(uploaded.filename or "")[1].lower()
+        if ext == ".csv":
+            rows, _, _ = _read_csv(raw)
+            sheet_names = ["CSV"]
+            sheet_index = 0
+        elif ext in (".xlsx", ".xls"):
+            sheets = _read_xls(raw) if ext == ".xls" else _read_xlsx(raw)
+            sheet_names = [name for name, _ in sheets]
+            sheet_index = int(request.form.get("sheet_index", "0"))
+            if not 0 <= sheet_index < len(sheets):
+                return api_error("工作表位置无效")
+            rows = sheets[sheet_index][1]
+        else:
+            return api_error("仅支持 .csv / .xlsx / .xls 文件")
+        if not rows:
+            return api_error("工作表为空")
+        row_number = int(request.form.get("header_row", str(suggest_header_row(rows))))
+        if not 0 <= row_number < len(rows):
+            return api_error("表头行超出文件范围")
+        headers = [str(value or "").strip() for value in rows[row_number]]
+        return jsonify({
+            "header_row": row_number, "headers": headers,
+            "suggested_mapping": map_headers(rows[row_number]),
+            "sheet_index": sheet_index, "sheet_names": sheet_names,
+        })
+    except Exception as exc:  # noqa: BLE001
+        logging.exception("import preview failed: %s", uploaded.filename)
+        return api_error(f"预览失败：{exc}")
 
 
 @app.post("/api/reset")

@@ -1,6 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+
 from PyInstaller.utils.hooks import collect_submodules
+
+project_root = os.path.abspath(os.path.join(SPECPATH, ".."))
 
 hiddenimports = [
     "PySide6.QtCore",
@@ -17,20 +21,12 @@ for pkg in ("flask", "openpyxl", "xlrd"):
     except Exception:
         pass
 
-datas = [("templates", "templates")]
-binaries = [
-    (r"C:\Windows\System32\msvcp140.dll", "."),
-    (r"C:\Windows\System32\msvcp140_1.dll", "."),
-    (r"C:\Windows\System32\msvcp140_2.dll", "."),
-    (r"C:\Windows\System32\msvcp140_atomic_wait.dll", "."),
-    (r"C:\Windows\System32\vcruntime140.dll", "."),
-    (r"C:\Windows\System32\vcruntime140_1.dll", "."),
-    (r"C:\Windows\System32\concrt140.dll", "."),
-]
+datas = [(os.path.join(project_root, "templates"), "templates")]
+binaries = []
 
 a = Analysis(
-    ["run.py"],
-    pathex=[],
+    [os.path.join(project_root, "run.py")],
+    pathex=[project_root],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
@@ -79,9 +75,17 @@ a = Analysis(
         "PySide6.QtWebEngineQuick",
         "PySide6.QtWebSockets",
         "PySide6.QtXml",
+        "webview",
     ],
     noarchive=False,
 )
+# Qt6Core uses the Windows ICU API. A similarly named ICU DLL on PATH (for
+# example from Poppler) can be collected here and lacks Qt's required exports.
+# Leave ICU resolution to Windows instead of bundling that incompatible DLL.
+a.binaries = [
+    entry for entry in a.binaries
+    if os.path.basename(entry[0]).lower() not in {"icuuc.dll", "icudt78.dll"}
+]
 pyz = PYZ(a.pure)
 
 exe = EXE(

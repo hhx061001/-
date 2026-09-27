@@ -205,9 +205,14 @@ class Bridge(QObject):
                     }
                 )
         if self.web:
-            self.web.page().runJavaScript(
-                "showFlash('导入完成'); loadDetail(); loadSummary(); loadLedgers();"
-            )
+            if any(item.get("error") for item in summaries):
+                self.web.page().runJavaScript(
+                    "switchPage('import'); showFlash('部分文件未导入，请在导入页面重新选择并查看提示', true);"
+                )
+            else:
+                self.web.page().runJavaScript(
+                    "showFlash('导入完成'); loadMonths(); loadDetail(); loadSummary(); loadLedgers();"
+                )
         return json.dumps({"ok": True, "results": summaries}, ensure_ascii=False)
 
     @Slot(str, str)
